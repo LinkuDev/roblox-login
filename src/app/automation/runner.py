@@ -68,6 +68,10 @@ def run_service(
                 options=options,
             )
             result = service.run(ctx)
+            # gom "ket qua co gia tri" (cookie/session) ra RunResult de tang tren
+            # (report_result) luu lai - flow chi set vao ctx.session.
+            if result.success and ctx.session.cookies and "session" not in result.data:
+                result.data["session"] = ctx.session.to_dict()
     finally:
         if proxy:
             proxy_provider.release(proxy, healthy=True)

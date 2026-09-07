@@ -8,7 +8,7 @@ from __future__ import annotations
 import signal
 
 from app.core.logging import get_logger, setup_logging
-from app.modules.jobs import build_queue, execute_job
+from app.modules.jobs import build_queue, process_record
 
 log = get_logger("worker")
 _running = True
@@ -32,13 +32,13 @@ def main() -> None:
         item = queue.dequeue(timeout=5)
         if item is None:
             continue
-        job_id, _payload = item
-        log.info("job_picked", job_id=job_id)
+        record_id, _payload = item
+        log.info("record_picked", record_id=record_id)
         try:
-            result = execute_job(job_id)
-            log.info("job_finished", job_id=job_id, **result)
-        except Exception as exc:  # worker khong duoc chet vi 1 job loi
-            log.error("job_crashed", job_id=job_id, error=str(exc))
+            result = process_record(record_id)
+            log.info("record_finished", record_id=record_id, **result)
+        except Exception as exc:  # worker khong duoc chet vi 1 record loi
+            log.error("record_crashed", record_id=record_id, error=str(exc))
 
 
 if __name__ == "__main__":

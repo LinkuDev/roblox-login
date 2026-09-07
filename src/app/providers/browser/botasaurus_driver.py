@@ -167,7 +167,8 @@ class BotasaurusProvider(BrowserProvider):
 
         opts: dict[str, Any] = {
             "headless": self.settings.headless if headless is None else headless,
-            "window_size": self.settings.window_size,
+            # Botasaurus muon (w, h); settings luu chuoi "w,h" nen dung .window
+            "window_size": self.settings.window,
         }
         if proxy:
             opts["proxy"] = proxy.url
@@ -176,6 +177,10 @@ class BotasaurusProvider(BrowserProvider):
         if profile:
             opts["profile"] = profile
         opts.update(kwargs)
+        # cho phep override window_size bang chuoi "w,h" -> chuan hoa ve (w, h)
+        if isinstance(opts.get("window_size"), str):
+            w, _, h = opts["window_size"].partition(",")
+            opts["window_size"] = (int(w), int(h))
 
         driver = Driver(**opts)
         session = BotasaurusSession(driver, self.settings)

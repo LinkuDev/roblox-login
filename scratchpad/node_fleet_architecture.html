@@ -1,0 +1,583 @@
+<title>Node Fleet Architecture</title>
+<meta name="description" content="Thiết kế phân tán: order sinh một pool record; node vật lý claim–chạy–report qua endpoint mỏng của SaaS.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#eceff3; --surface:#ffffff; --surface-2:#f4f6f9; --code-bg:#0f1620; --code-ink:#d7e0ea;
+  --ink:#111823; --muted:#59636f; --line:#d6dde5; --line-strong:#c1cad4;
+  --node:#0d7d78; --saas:#4353b8; --warn:#b4690e;
+  --node-soft:rgba(13,125,120,.10); --saas-soft:rgba(67,83,184,.09); --warn-soft:rgba(180,105,14,.12);
+  --node-line:rgba(13,125,120,.42); --saas-line:rgba(67,83,184,.40); --warn-line:rgba(180,105,14,.45);
+  --shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 24px -14px rgba(16,24,40,.28);
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c1016; --surface:#141a22; --surface-2:#1a212b; --code-bg:#0a0f15; --code-ink:#cdd7e2;
+    --ink:#e6ebf1; --muted:#8a95a3; --line:#28313d; --line-strong:#37424f;
+    --node:#2fc7be; --saas:#8497f2; --warn:#e0a44a;
+    --node-soft:rgba(47,199,190,.11); --saas-soft:rgba(132,151,242,.12); --warn-soft:rgba(224,164,74,.13);
+    --node-line:rgba(47,199,190,.5); --saas-line:rgba(132,151,242,.5); --warn-line:rgba(224,164,74,.5);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c1016; --surface:#141a22; --surface-2:#1a212b; --code-bg:#0a0f15; --code-ink:#cdd7e2;
+  --ink:#e6ebf1; --muted:#8a95a3; --line:#28313d; --line-strong:#37424f;
+  --node:#2fc7be; --saas:#8497f2; --warn:#e0a44a;
+  --node-soft:rgba(47,199,190,.11); --saas-soft:rgba(132,151,242,.12); --warn-soft:rgba(224,164,74,.13);
+  --node-line:rgba(47,199,190,.5); --saas-line:rgba(132,151,242,.5); --warn-line:rgba(224,164,74,.5);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:0 24px 120px}
+.mono{font-family:'IBM Plex Mono','SFMono-Regular',ui-monospace,Menlo,monospace}
+
+header.top{
+  position:sticky; top:0; z-index:20; background:color-mix(in srgb,var(--bg) 86%, transparent);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+}
+.top-in{max-width:1080px; margin:0 auto; padding:12px 24px; display:flex; align-items:center; gap:14px}
+.brand{font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+.brand b{color:var(--ink); font-weight:600}
+.spacer{flex:1}
+.themebtn{
+  font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); background:var(--surface); border:1px solid var(--line); border-radius:7px;
+  padding:6px 11px; cursor:pointer;
+}
+.themebtn:hover{color:var(--ink); border-color:var(--line-strong)}
+.themebtn:focus-visible{outline:2px solid var(--saas); outline-offset:2px}
+
+.hero{padding:64px 0 40px; border-bottom:1px solid var(--line)}
+.eyebrow{font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--node); margin:0 0 18px}
+h1{font-size:clamp(30px,5vw,46px); line-height:1.08; font-weight:700; letter-spacing:-.02em; margin:0 0 20px; text-wrap:balance; max-width:16ch}
+.lede{font-size:clamp(16px,2.1vw,19px); color:var(--muted); max-width:66ch; margin:0}
+.lede b{color:var(--ink); font-weight:600}
+
+section{padding:52px 0; border-bottom:1px solid var(--line)}
+.sec-num{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); letter-spacing:.1em}
+h2{font-size:clamp(22px,3vw,28px); font-weight:600; letter-spacing:-.015em; margin:6px 0 14px; text-wrap:balance}
+h3{font-size:16px; font-weight:600; margin:26px 0 8px; letter-spacing:-.01em}
+p{margin:0 0 16px; max-width:70ch}
+.prose{max-width:70ch}
+strong{font-weight:600}
+code.k{font-family:'IBM Plex Mono',monospace; font-size:.88em; background:var(--surface-2); border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:var(--ink)}
+a.file{font-family:'IBM Plex Mono',monospace; font-size:.86em; color:var(--saas); text-decoration:none; border-bottom:1px dotted var(--saas-line)}
+ul.tight{margin:0 0 16px; padding-left:20px; max-width:70ch}
+ul.tight li{margin:6px 0}
+ul.tight li::marker{color:var(--muted)}
+
+.callout{
+  background:var(--node-soft); border:1px solid var(--node-line); border-radius:14px;
+  padding:22px 24px; margin:8px 0 6px; display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:start;
+}
+.callout .tag{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--node); writing-mode:vertical-rl; transform:rotate(180deg); align-self:stretch; border-left:2px solid var(--node-line); padding-left:2px}
+.callout p{margin:0 0 10px}
+.callout p:last-child{margin:0}
+
+figure{margin:26px 0 8px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:22px 22px 8px; box-shadow:var(--shadow); overflow-x:auto}
+figure svg{display:block; width:100%; height:auto; min-width:620px}
+figcaption{font-size:13.5px; color:var(--muted); padding:14px 4px 8px; max-width:80ch; border-top:1px solid var(--line); margin-top:12px}
+figcaption b{color:var(--ink); font-weight:600}
+
+.d-box{fill:var(--surface); stroke:var(--line-strong); stroke-width:1.5}
+.d-node{fill:var(--node-soft); stroke:var(--node-line); stroke-width:1.5}
+.d-saas{fill:var(--saas-soft); stroke:var(--saas-line); stroke-width:1.5}
+.d-warn{fill:var(--warn-soft); stroke:var(--warn-line); stroke-width:1.5}
+.d-t{fill:var(--ink); font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:600}
+.d-s{fill:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11px}
+.d-lbl{fill:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11.5px}
+.d-nodet{fill:var(--node); font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:500}
+.d-saast{fill:var(--saas); font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:500}
+.d-warnt{fill:var(--warn); font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:500}
+.d-flow{stroke:var(--muted); stroke-width:1.6; fill:none}
+.d-flow-n{stroke:var(--node); stroke-width:1.8; fill:none}
+.d-flow-s{stroke:var(--saas); stroke-width:1.8; fill:none}
+.d-flow-w{stroke:var(--warn); stroke-width:1.8; fill:none; stroke-dasharray:5 4}
+.d-bound{stroke:var(--line-strong); stroke-width:1.4; stroke-dasharray:2 5}
+
+.tablewrap{overflow-x:auto; margin:24px 0 8px; border:1px solid var(--line); border-radius:14px}
+table{border-collapse:collapse; width:100%; min-width:640px; font-size:14px}
+th,td{text-align:left; padding:13px 16px; vertical-align:top; border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+thead th{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); background:var(--surface-2); font-weight:500}
+td.who{white-space:nowrap; font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:500}
+.pill{display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.04em; padding:2px 8px; border-radius:20px; border:1px solid transparent}
+.pill.node{color:var(--node); background:var(--node-soft); border-color:var(--node-line)}
+.pill.saas{color:var(--saas); background:var(--saas-soft); border-color:var(--saas-line)}
+
+pre{background:var(--code-bg); color:var(--code-ink); border-radius:12px; padding:18px 20px; overflow-x:auto; font-family:'IBM Plex Mono',monospace; font-size:12.6px; line-height:1.7; margin:18px 0; border:1px solid rgba(255,255,255,.06)}
+pre .c{color:#7d8ca3}
+pre .s{color:#7fd6cd}
+pre .a{color:#9db2ff}
+pre .w{color:#e6b366}
+
+.ladder{display:flex; flex-direction:column; gap:0; margin:26px 0 6px}
+.phase{display:grid; grid-template-columns:64px 1fr; gap:20px; padding:22px 0; border-top:1px solid var(--line)}
+.phase:first-child{border-top:none}
+.phase .pn{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px; color:var(--saas); border:1px solid var(--saas-line); background:var(--saas-soft); border-radius:9px; height:44px; display:flex; align-items:center; justify-content:center}
+.phase.done .pn{color:var(--node); border-color:var(--node-line); background:var(--node-soft)}
+.phase h3{margin:0 0 6px}
+.phase p{margin:0 0 8px; font-size:14.5px; color:var(--muted)}
+.phase .files{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted)}
+.phase .files b{color:var(--ink); font-weight:500}
+
+.decgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; margin:24px 0 0}
+.dec{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px 20px; box-shadow:var(--shadow)}
+.dec.settled{background:var(--node-soft); border-color:var(--node-line)}
+.dec .q{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--warn); margin:0 0 8px}
+.dec.settled .q{color:var(--node)}
+.dec h3{margin:0 0 8px; font-size:15.5px}
+.dec p{font-size:13.5px; color:var(--muted); margin:0}
+.dec .rec{margin-top:10px; font-size:13px; color:var(--ink)}
+.dec .rec b{color:var(--node)}
+
+.foot{padding-top:40px; color:var(--muted); font-size:13px; font-family:'IBM Plex Mono',monospace}
+
+@media (max-width:640px){
+  .callout{grid-template-columns:1fr}
+  .callout .tag{writing-mode:horizontal-tb; transform:none; border-left:none; border-top:2px solid var(--node-line); padding:6px 0 0}
+  .phase{grid-template-columns:1fr; gap:10px}
+  .phase .pn{width:44px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <span class="brand"><b>Node Fleet</b> · roblox-automation · design doc</span>
+    <span class="spacer"></span>
+    <button class="themebtn" id="themebtn" type="button" aria-label="Đổi giao diện sáng/tối">◐ theme</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">Architecture · v1 · pool–pull · 2026-09-07</p>
+    <h1>Kiến trúc Node Fleet</h1>
+    <p class="lede">Một order = một <b>pool hàng nghìn record</b>. Các node vật lý tự connect vào, <b>claim</b> record từ trên xuống, lấy <code class="k">user:pass</code>, chạy flow, rồi <b>ghi lại status</b> của record (success / failed + lý do). Node cầm phần <em>chạy</em> và <em>lật trạng thái record</em>; SaaS giữ pool, sổ điểm và trừ tiền khi node report. Cả hệ chỉ là: giữ nguyên flow engine, tách một đường nối trong <code class="k">executor</code>, và cho node claim/report qua một endpoint mỏng.</p>
+  </div>
+
+  <!-- PRINCIPLE -->
+  <section id="principle">
+    <span class="sec-num">§0</span>
+    <h2>Nguyên tắc cốt lõi</h2>
+    <div class="callout">
+      <span class="tag">Invariant</span>
+      <div>
+        <p><b>Node = chạy flow + lật status record.</b> Nó claim một record từ pool, lấy input, chạy <code class="k">Flow</code>, rồi report kết quả — <code class="k">success</code>, hoặc <code class="k">failed</code> kèm lý do. Nó là thằng <em>duy nhất</em> biết kết quả nên nó phải là thằng đẩy record sang trạng thái cuối. Cái nó <b>không</b> giữ: logic point/order/billing, và credential DB thẳng.</p>
+        <p><b>SaaS = pool + sổ sách.</b> Order sinh ra một pool record <code class="k">QUEUED</code>. SaaS phát record khi node xin (<code class="k">claim</code>), và khi node <code class="k">report</code> thì SaaS ghi status + trừ điểm nếu thành công. Điểm/billing nằm <em>sau</em> lời gọi report, phía server — không rơi xuống node.</p>
+        <p>Nhờ ranh giới này, mở rộng ngang = bật thêm node (không đụng SaaS); và node "chạm DB" chỉ qua đúng hai thao tác <code class="k">claim</code> / <code class="k">report</code> — không phải toàn quyền vào Postgres.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOPOLOGY -->
+  <section id="topology">
+    <span class="sec-num">§1</span>
+    <h2>Topology &amp; trust boundary</h2>
+    <div class="prose">
+      <p>Node ở mạng khác, sau NAT, không tin cậy tuyệt đối. Nó <strong>kết nối ra ngoài</strong> tới một <em>Pool API</em> mỏng của SaaS và chỉ làm được hai việc: <code class="k">claim_next()</code> lấy record, <code class="k">report()</code> trả kết quả. Postgres (pool + sổ điểm) nằm <strong>hẳn phía trong</strong>; node không cầm creds DB, không có port DB nào phơi ra internet. Trừ điểm chạy server-side ngay khi report tới.</p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 560" role="img" aria-label="SaaS ở trên gồm API/Web, Postgres pool, Redis index và một Pool API expose claim_next và report; ranh giới WSS ở giữa; các node ở dưới kết nối outbound, gọi claim để nhận record và report để ghi status; billing chạy server-side khi report tới.">
+        <rect x="30" y="24" width="880" height="212" rx="14" fill="none" stroke="var(--line)" stroke-width="1.3" stroke-dasharray="4 4"/>
+        <text class="d-saast" x="48" y="46">SaaS · POOL + SỔ SÁCH</text>
+
+        <rect class="d-box" x="48" y="62" width="176" height="58" rx="10"/>
+        <text class="d-t" x="66" y="88">API / Web</text>
+        <text class="d-s" x="66" y="106">tạo order → sinh pool</text>
+
+        <rect class="d-box" x="252" y="62" width="204" height="58" rx="10"/>
+        <text class="d-t" x="270" y="88">Postgres</text>
+        <text class="d-s" x="270" y="106">pool record · point · user</text>
+
+        <rect class="d-box" x="484" y="62" width="176" height="58" rx="10"/>
+        <text class="d-t" x="502" y="88">Redis</text>
+        <text class="d-s" x="502" y="106">index QUEUED (nhanh)</text>
+
+        <rect class="d-saas" x="252" y="150" width="284" height="66" rx="10"/>
+        <text class="d-t" x="270" y="178">Pool API</text>
+        <text class="d-s" x="270" y="197">claim_next() · report() · billing on report</text>
+
+        <rect class="d-box" x="560" y="150" width="200" height="66" rx="10"/>
+        <text class="d-t" x="578" y="178">Proxy pool</text>
+        <text class="d-s" x="578" y="197">sticky theo account</text>
+
+        <path class="d-flow" d="M354 120 V150"/>
+        <text class="d-lbl" x="150" y="140">enqueue record</text>
+        <path class="d-flow" d="M150 120 C150 136 250 150 300 150"/>
+
+        <line class="d-bound" x1="30" y1="290" x2="910" y2="290"/>
+        <text class="d-lbl" x="30" y="282">WSS · TLS trust boundary</text>
+        <text class="d-warnt" x="600" y="282">record ↓   status + reason ↑</text>
+
+        <rect class="d-node" x="48" y="336" width="224" height="92" rx="12"/>
+        <text class="d-t" x="66" y="364">Node A</text>
+        <text class="d-nodet" x="66" y="385">Agent · M slots</text>
+        <text class="d-s" x="66" y="404">botasaurus + captcha + proxy</text>
+        <text class="d-s" x="66" y="420">run_service() standalone</text>
+
+        <rect class="d-node" x="296" y="336" width="176" height="92" rx="12"/>
+        <text class="d-t" x="314" y="364">Node B</text>
+        <text class="d-nodet" x="314" y="385">claim → run → report</text>
+        <text class="d-s" x="314" y="404">M slots</text>
+
+        <rect class="d-node" x="496" y="336" width="176" height="92" rx="12"/>
+        <text class="d-t" x="514" y="364">Node C</text>
+        <text class="d-nodet" x="514" y="385">claim → run → report</text>
+        <text class="d-s" x="514" y="404">M slots</text>
+
+        <text class="d-s" x="712" y="388">Node N …</text>
+        <text class="d-s" x="712" y="406">bật thêm = scale</text>
+
+        <!-- node A wired to Pool API: outbound, node-initiated -->
+        <path class="d-flow-n" d="M300 336 V300 Q300 292 320 292 H372 Q392 292 392 284 V216" marker-end="url(#ah-n)"/>
+        <path class="d-flow" d="M384 336 V312 Q384 300 410 300 H540 Q560 300 560 292"/>
+        <path class="d-flow" d="M156 336 V314 Q156 300 210 300 H545 Q562 300 562 292"/>
+
+        <text class="d-nodet" x="410" y="315">claim_next →   ← record</text>
+        <text class="d-nodet" x="410" y="332">report → (status + reason)</text>
+
+        <defs>
+          <marker id="ah-n" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--node)"/></marker>
+        </defs>
+      </svg>
+      <figcaption><b>Node quay ra, gọi đúng hai cửa.</b> Mọi trao đổi do node khởi xướng qua Pool API: <span class="mono">claim_next</span> để nhận record, <span class="mono">report</span> để ghi status. Postgres không bao giờ lộ ra biên; một node bị chiếm chỉ thấy các record đang giao cho chính nó, và không thể tự trừ/điều chỉnh điểm — billing chạy server-side khi report tới.</figcaption>
+    </figure>
+  </section>
+
+  <!-- THE SEAM -->
+  <section id="seam">
+    <span class="sec-num">§2</span>
+    <h2>Đường nối: tách <code class="k">executor.py</code> thành claim · run · report</h2>
+    <div class="prose">
+      <p>Đây là refactor mở khoá tất cả, và nó rẻ. Hôm nay <a class="file">modules/jobs/executor.py</a> làm ba việc dính liền: đọc DB lấy input → chạy flow → ghi DB + trừ điểm. Cắt đúng hai vết: <strong>claim</strong> (server trả input) và <strong>report</strong> (server ghi status + bill). <strong>Pha giữa — <code class="k">run_service</code> — không đổi một dòng</strong>, chỉ dịch xuống node.</p>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 340" role="img" aria-label="Hàng trên: execute_job hôm nay đọc DB, chạy run_service, ghi DB trên một máy. Hàng dưới: node gọi claim ở SaaS để nhận input, chạy run_service trên node, gọi report ở SaaS để ghi status và trừ điểm; hai vết cắt là WSS.">
+        <text class="d-lbl" x="30" y="34">HÔM NAY · execute_job() — dính liền, 1 máy</text>
+        <rect class="d-box" x="30" y="48" width="880" height="86" rx="12"/>
+        <rect class="d-saas" x="52" y="70" width="212" height="42" rx="8"/>
+        <text class="d-t" x="68" y="96">read DB · input</text>
+        <path class="d-flow" d="M264 91 H304" marker-end="url(#a2)"/>
+        <rect class="d-node" x="304" y="70" width="240" height="42" rx="8"/>
+        <text class="d-t" x="320" y="96">run_service() · Flow</text>
+        <path class="d-flow" d="M544 91 H584" marker-end="url(#a2)"/>
+        <rect class="d-saas" x="584" y="70" width="304" height="42" rx="8"/>
+        <text class="d-t" x="600" y="96">write DB · status + trừ point</text>
+
+        <text class="d-lbl" x="418" y="176">cắt ở 2 chỗ ▼ &nbsp; node khởi xướng cả hai cửa</text>
+
+        <text class="d-lbl" x="30" y="212">FLEET · pool–pull — pha giữa relocate xuống node</text>
+        <rect class="d-saas" x="30" y="226" width="220" height="70" rx="10"/>
+        <text class="d-t" x="46" y="253">claim_next()</text>
+        <text class="d-saast" x="46" y="273">SaaS</text>
+        <text class="d-s" x="112" y="273">trả record + input</text>
+
+        <path class="d-flow-w" d="M250 261 H310" marker-end="url(#aw)"/>
+        <text class="d-nodet" x="256" y="252">wss ↓</text>
+
+        <rect class="d-node" x="310" y="226" width="292" height="70" rx="10"/>
+        <text class="d-t" x="326" y="253">run_service() · Flow</text>
+        <text class="d-nodet" x="326" y="273">NODE</text>
+        <text class="d-s" x="372" y="273">y hệt hộp teal ở trên</text>
+
+        <path class="d-flow-w" d="M602 261 H662" marker-end="url(#aw)"/>
+        <text class="d-nodet" x="608" y="252">wss ↑</text>
+
+        <rect class="d-saas" x="662" y="226" width="248" height="70" rx="10"/>
+        <text class="d-t" x="678" y="253">report()</text>
+        <text class="d-saast" x="678" y="273">SaaS</text>
+        <text class="d-s" x="736" y="273">status + reason + bill</text>
+
+        <defs>
+          <marker id="a2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--muted)"/></marker>
+          <marker id="aw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--warn)"/></marker>
+        </defs>
+      </svg>
+      <figcaption><b>Cùng một seam, hai kiểu triển khai.</b> Hộp teal <span class="mono">run_service()</span> không đổi — chỉ dịch từ "trong process" ra "trên node". Worker co-located (dev, 1 máy) gọi cả ba pha in-process; node remote gọi <span class="mono">claim</span>/<span class="mono">report</span> qua WSS còn <span class="mono">run_service</span> chạy tại chỗ. Idempotent theo <span class="mono">record_id</span>: một node zombie report muộn không trừ điểm hai lần.</figcaption>
+    </figure>
+  </section>
+
+  <!-- LIFECYCLE -->
+  <section id="lifecycle">
+    <span class="sec-num">§3</span>
+    <h2>Vòng đời một record &amp; cơ chế claim</h2>
+    <div class="prose">
+      <p>Claim là "mượn có hạn". Node claim record (atomic, không hai node vớ trùng) rồi giữ một <strong>claim TTL</strong>. Có hai kết cục khác nhau, và phải phân biệt:</p>
+      <ul class="tight">
+        <li><strong>Fail nghiệp vụ</strong> (sai pass · account khoá · 2FA sai): node report <code class="k">failed + reason</code> → record <strong>FAILED, terminal</strong>, không claim lại. Đúng như <code class="k">AutomationError</code> hiện tại không retry.</li>
+        <li><strong>Fail hạ tầng</strong> (node chết · WSS rớt · claim TTL hết): record <strong>tự nhả về QUEUED</strong> cho node khác, attempt++, tới ngưỡng mới bỏ.</li>
+      </ul>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 940 300" role="img" aria-label="Record QUEUED được node claim thành CLAIMED rồi RUNNING; report success dẫn tới RECORDED ghi status và trừ điểm; report failed kèm reason dẫn tới FAILED terminal; còn claim TTL hết hoặc mất node thì quay lại QUEUED tăng attempt.">
+        <rect class="d-saas" x="24" y="112" width="126" height="56" rx="10"/>
+        <text class="d-t" x="40" y="138">Record</text>
+        <text class="d-saast" x="40" y="156">QUEUED</text>
+
+        <path class="d-flow-n" d="M150 140 H196" marker-end="url(#a3n)"/>
+        <text class="d-lbl" x="150" y="130">claim</text>
+
+        <rect class="d-node" x="196" y="112" width="128" height="56" rx="10"/>
+        <text class="d-t" x="212" y="138">CLAIMED</text>
+        <text class="d-nodet" x="212" y="156">→ node · TTL</text>
+
+        <path class="d-flow-n" d="M324 140 H370" marker-end="url(#a3n)"/>
+        <text class="d-lbl" x="330" y="130">run</text>
+
+        <rect class="d-node" x="370" y="112" width="130" height="56" rx="10"/>
+        <text class="d-t" x="386" y="138">RUNNING</text>
+        <text class="d-nodet" x="386" y="156">events ↑</text>
+
+        <!-- success branch -->
+        <path class="d-flow-s" d="M500 128 C548 108 560 100 606 100" marker-end="url(#a3)"/>
+        <text class="d-lbl" x="512" y="98">report ok</text>
+        <rect class="d-saas" x="606" y="74" width="176" height="52" rx="10"/>
+        <text class="d-t" x="622" y="98">RECORDED</text>
+        <text class="d-saast" x="622" y="116">status + trừ point</text>
+
+        <!-- business fail branch -->
+        <path class="d-flow-w" d="M500 152 C548 176 560 186 606 186" marker-end="url(#a3w)"/>
+        <text class="d-warnt" x="506" y="200">report fail(reason)</text>
+        <rect class="d-warn" x="606" y="160" width="176" height="52" rx="10"/>
+        <text class="d-t" x="622" y="184">FAILED</text>
+        <text class="d-warnt" x="622" y="202">+ lý do · terminal</text>
+
+        <!-- requeue loop: infra fail -->
+        <path class="d-flow-w" d="M435 112 C435 44 240 44 200 44 C120 44 84 44 84 108" marker-end="url(#a3w)"/>
+        <text class="d-warnt" x="250" y="38">claim TTL hết / mất node → requeue (attempt++)</text>
+
+        <defs>
+          <marker id="a3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--saas)"/></marker>
+          <marker id="a3n" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--node)"/></marker>
+          <marker id="a3w" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--warn)"/></marker>
+        </defs>
+      </svg>
+      <figcaption><b>Hai loại "fail" đi hai đường.</b> Node report thất bại nghiệp vụ → record chốt <span class="mono">FAILED</span> kèm lý do, không phí thêm lượt. Còn hạ tầng hỏng (node biến mất, TTL hết) thì record quay lại pool cho node khác. Trạng thái sống của record do Pool API giữ; node chỉ báo tiến độ.</figcaption>
+    </figure>
+  </section>
+
+  <!-- RESPONSIBILITIES -->
+  <section id="responsibilities">
+    <span class="sec-num">§4</span>
+    <h2>Trách nhiệm từng thành phần</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Thành phần</th><th>Ở đâu</th><th>Giữ gì / làm gì</th></tr></thead>
+        <tbody>
+          <tr><td class="who">API / OrderService</td><td><span class="pill saas">SaaS</span></td><td>Nhận list <code class="k">user:pass</code>, tạo Order + sinh N record <code class="k">QUEUED</code> vào pool. Gần như không đổi so với hiện tại.</td></tr>
+          <tr><td class="who">Pool API</td><td><span class="pill saas">SaaS</span></td><td><code class="k">claim_next(n)</code> — cấp record cho node (atomic, gắn TTL); <code class="k">report(id, result)</code> — ghi status + reason, trừ điểm nếu success. <em>Thành phần mới, mỏng.</em></td></tr>
+          <tr><td class="who">Pool store</td><td><span class="pill saas">SaaS</span></td><td>Postgres = nguồn sự thật của record/status; Redis (tuỳ chọn) = index QUEUED cho claim nhanh. Reclaim record quá hạn TTL.</td></tr>
+          <tr><td class="who">Billing</td><td><span class="pill saas">SaaS</span></td><td>Chạy <em>sau</em> report thành công. Node không bao giờ tính điểm.</td></tr>
+          <tr><td class="who">NodeAgent</td><td><span class="pill node">Node</span></td><td>Connect outbound; vòng lặp <code class="k">claim → run → report</code>; chạy tối đa M slot song song; buffer + gia hạn TTL khi WSS chớp. <em>Runtime mới.</em></td></tr>
+          <tr><td class="who">run_service</td><td><span class="pill node">Node</span></td><td>Flow engine hiện tại — botasaurus + captcha + proxy. <strong>Không sửa.</strong></td></tr>
+          <tr><td class="who">Local buffer</td><td><span class="pill node">Node</span></td><td>Sqlite/jsonl nhỏ: nhớ record đang chạy để reconnect report lại, không mất session khi WSS rớt giữa chừng.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PROTOCOL -->
+  <section id="protocol">
+    <span class="sec-num">§5</span>
+    <h2>Giao thức Node ↔ SaaS (claim / report)</h2>
+    <div class="prose">
+      <p>Envelope nhỏ, <strong>transport-agnostic</strong> — WSS hôm nay, đổi HTTP/NATS/gRPC sau chỉ là thay adapter. Đặt sau một port <code class="k">PoolLink</code> giống cách <code class="k">BrowserSession</code> giấu botasaurus. Node luôn là bên khởi xướng.</p>
+    </div>
+    <pre><span class="c"># envelope chung</span>
+{ <span class="a">"type"</span>: <span class="s">"claim"</span>, <span class="a">"msg_id"</span>: <span class="s">"..."</span>, <span class="a">"ts"</span>: 1725..., <span class="a">"payload"</span>: { ... } }
+
+<span class="c"># Node → SaaS  (node khởi xướng)</span>
+hello        <span class="c"># auth(node_token) + capabilities[service] + max_slots + version</span>
+heartbeat    <span class="c"># free_slots, health, metrics — mỗi ~5s</span>
+claim        <span class="c"># xin tối đa n = free_slots record; SaaS trả records (atomic + TTL)</span>
+extend       <span class="c"># gia hạn claim TTL cho record đang chạy lâu</span>
+event        <span class="c"># started | step:{name,outcome} | needs_input(2fa / manual-captcha)</span>
+report       <span class="c"># {record_id, success, SessionArtifact} | {record_id, failed, error_code, reason}</span>
+
+<span class="c"># SaaS → Node  (đáp lại)</span>
+welcome      <span class="c"># chấp nhận + config (concurrency, poll interval)</span>
+records      <span class="c"># danh sách record trả cho một claim: credential, proxy, service_id, options, ttl</span>
+input        <span class="c"># đáp needs_input: mã 2FA / token captcha, đúng record đó</span>
+cancel       <span class="c"># huỷ record (order bị dừng) — node bỏ, nhả claim</span>
+drain        <span class="c"># ngừng claim mới, chạy nốt — để update/tắt node êm</span></pre>
+    <p><code class="k">needs_input</code>: solver <code class="k">manual</code> và bước 2FA thành một round-trip qua Pool API — node hỏi (<code class="k">event</code>), server/admin trả (<code class="k">input</code>), đúng record đó nhận lại. Thiết kế kênh hai chiều ngay để sau khỏi mổ lại.</p>
+  </section>
+
+  <!-- SCHEDULING -->
+  <section id="scheduling">
+    <span class="sec-num">§6</span>
+    <h2>Fan-out hàng nghìn account — vì sao pull hợp hơn</h2>
+    <ul class="tight">
+      <li><strong>Tự cân tải, không cần scheduler.</strong> Node khoẻ claim nhiều, node yếu claim ít — mỗi node chỉ xin đúng <code class="k">free_slots</code>. Không có "bộ não" trung tâm phải theo dõi capacity từng node; đây là lý do pull đơn giản hơn push cho ca này.</li>
+      <li><strong>Backpressure &amp; fan-out là mặc định.</strong> Order 5.000 record đổ vào pool; node cứ rảnh là claim tiếp — tự trải khắp đàn, tốc độ thật = tổng throughput. Không cần "chia trước".</li>
+      <li><strong>Claim phải atomic.</strong> Hai node không được vớ trùng record. Postgres: <code class="k">SELECT … FOR UPDATE SKIP LOCKED</code>; hoặc Redis atomic pop. Đây là điểm sống-còn của mô hình pool.</li>
+      <li><strong>Claim TTL = an toàn khi node chết.</strong> Reclaim record quá hạn về QUEUED. Node đang chạy lâu thì <code class="k">extend</code> để khỏi bị giật mất.</li>
+      <li><strong>Pacing chống rate-limit Roblox.</strong> Trần theo proxy/subnet, delay giữa các lần trên cùng IP — cài như filter lúc claim hoặc delay phía node.</li>
+      <li><strong>Sticky theo account.</strong> Retry một account nên rơi về node/proxy cũ — claim ưu tiên record có affinity với node đang xin.</li>
+    </ul>
+  </section>
+
+  <!-- PROXY -->
+  <section id="proxy">
+    <span class="sec-num">§7</span>
+    <h2>Proxy</h2>
+    <div class="prose">
+      <p><code class="k">Proxy</code> và port <code class="k">ProxyProvider.acquire(key=account)</code> đã có — chỉ còn hỏi <strong>gán proxy ở đâu</strong>:</p>
+      <ul class="tight">
+        <li><strong>SaaS gán</strong> (khuyến nghị): <code class="k">claim</code> trả kèm proxy sticky theo account. Pool tập trung, health &amp; kế toán tập trung, retry giữ nguyên proxy. Node "ngu" — dễ vận hành.</li>
+        <li><strong>Node-local pool</strong>: mỗi node có list proxy riêng theo region/mạng của nó (hợp residential gắn địa lý). Node tự chọn.</li>
+        <li><strong>Lai</strong>: record mang <code class="k">proxy_policy = assigned | node_pool | direct</code>; node resolve theo đó. Port hiện tại chạy được cả hai phía.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section id="security">
+    <span class="sec-num">§8</span>
+    <h2>Bảo mật &amp; ranh giới tin cậy</h2>
+    <ul class="tight">
+      <li><strong>Chỉ hai cửa.</strong> Node tác động DB đúng qua <code class="k">claim</code> / <code class="k">report</code> — không toàn quyền Postgres, không tự sửa điểm/đơn.</li>
+      <li><strong>Danh tính node.</strong> Mỗi node một token (hoặc mTLS), xoay được; thu hồi là node mất quyền claim.</li>
+      <li><strong>Credential là tài sản.</strong> <code class="k">user:pass</code> chỉ đi trong WSS/TLS, node giữ trong RAM, xong record thì xoá — không ghi đĩa (hoặc mã hoá + TTL ngắn).</li>
+      <li><strong>Blast radius nhỏ.</strong> Node chỉ thấy record đang claim; một node bị chiếm không lộ cả pool.</li>
+      <li><strong>Kết quả nhạy cảm.</strong> Session cookie đi lên qua report; node ack xong nên xoá.</li>
+    </ul>
+  </section>
+
+  <!-- MIGRATION -->
+  <section id="migration">
+    <span class="sec-num">§9</span>
+    <h2>Lộ trình migration</h2>
+    <div class="prose"><p>Vì runner đã standalone, migration là <strong>cộng thêm</strong>, không viết lại. Mỗi pha chạy được và bán được ngay.</p></div>
+    <div class="ladder">
+      <div class="phase done">
+        <div class="pn">0</div>
+        <div>
+          <h3>Hôm nay — worker co-located</h3>
+          <p>Worker kéo Redis, <code class="k">execute_job</code> làm tất cả trên 1 box. Chạy được, nhưng chưa ra node remote.</p>
+          <div class="files"><b>worker/main.py</b> · <b>modules/jobs/executor.py</b> · <b>automation/runner.py</b></div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">1</div>
+        <div>
+          <h3>Tách seam claim/run/report — rủi ro thấp, làm trước</h3>
+          <p>Cắt <code class="k">execute_job</code> thành <code class="k">claim_input</code> / <code class="k">run_service</code> / <code class="k">report_result</code>. Hành vi không đổi; worker gọi cả ba in-process. Đây là vết cắt tạo ranh giới.</p>
+          <div class="files"><b>modules/jobs/pool.py</b> (mới: claim/report) · giữ <b>execute_job</b> làm đường local</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">2</div>
+        <div>
+          <h3>Pool API + WSS + node claim/report client</h3>
+          <p>Expose <code class="k">claim_next</code> / <code class="k">report</code> sau port <code class="k">PoolLink</code> + adapter WSS. Dựng NodeAgent claim–run–report. Một node remote claim thật. Worker local vẫn là fallback.</p>
+          <div class="files"><b>domain/ports/pool_link.py</b> · <b>providers/transport/ws_*.py</b> · <b>modules/nodes/pool_api.py</b> · <b>node/agent.py</b></div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">3</div>
+        <div>
+          <h3>Claim chắc chắn</h3>
+          <p>Atomic claim (<code class="k">SKIP LOCKED</code>) + reclaim theo TTL + <code class="k">extend</code> + pacing/sticky. Fail nghiệp vụ terminal, fail hạ tầng requeue.</p>
+          <div class="files"><b>modules/nodes/pool_store.py</b> · reclaim job</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">4</div>
+        <div>
+          <h3>App node standalone</h3>
+          <p>Đóng gói NodeAgent thành app phát hành được: mở lên auto-connect, form config (token, URL, max_slots, nguồn proxy). Scale = mở thêm app trên máy mới.</p>
+          <div class="files"><b>node/app</b> (đóng gói) · config UI</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pn">5</div>
+        <div>
+          <h3>Hardening</h3>
+          <p>Metrics per-node, ưu tiên claim theo success-rate, proxy pool health, mã hoá credential at-rest, dashboard đàn node.</p>
+          <div class="files">observability · admin dashboard</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEW MODULES -->
+  <section id="modules">
+    <span class="sec-num">§10</span>
+    <h2>Port &amp; module mới cần thêm</h2>
+    <ul class="tight">
+      <li><code class="k">domain/ports/pool_link.py</code> — <strong>PoolLink</strong>: <code class="k">claim</code>/<code class="k">report</code>/<code class="k">event</code> typed, transport-agnostic (WSS hôm nay).</li>
+      <li><code class="k">providers/transport/ws_server.py · ws_client.py</code> — adapter WSS cho hai đầu.</li>
+      <li><code class="k">modules/nodes/</code> — <strong>pool_api</strong> (claim/report endpoint), <strong>pool_store</strong> (atomic claim + reclaim TTL), <strong>protocol</strong> (schema envelope), <strong>registry</strong> (heartbeat/health, cho dashboard).</li>
+      <li><code class="k">node/</code> — runtime mới: <strong>NodeAgent</strong> (claim–run–report loop), slot pool, local buffer, reconnect. Dùng lại <code class="k">automation/runner.py</code> nguyên vẹn.</li>
+      <li>Tách <code class="k">modules/jobs/executor.py</code> → <code class="k">pool.py</code> (claim_input + report_result); giữ <code class="k">execute_job</code> làm đường local.</li>
+    </ul>
+  </section>
+
+  <!-- DECISIONS -->
+  <section id="decisions" style="border-bottom:none">
+    <span class="sec-num">§11</span>
+    <h2>Chốt trước khi code</h2>
+    <div class="prose"><p>Model <strong>pool–pull</strong> đã chốt theo hướng của bạn. Còn lại vài ngã rẽ — mình đề xuất sẵn, cái đầu là quan trọng nhất:</p></div>
+    <div class="decgrid">
+      <div class="dec">
+        <p class="q">★ Câu mở chính</p>
+        <h3>Node chạm pool bằng gì?</h3>
+        <p>Endpoint mỏng của SaaS, hay cắm thẳng DB/Redis?</p>
+        <p class="rec">→ đề xuất <b>endpoint claim/report</b> (không creds DB trên node, billing server-side). Cắm thẳng chỉ khi node ở mạng riêng/VPN.</p>
+      </div>
+      <div class="dec settled">
+        <p class="q">✓ Đã chốt</p>
+        <h3>Pull-from-pool, không push</h3>
+        <p>Node tự claim top-down; không dispatcher trung tâm.</p>
+        <p class="rec">→ <b>tự cân tải</b>, ít thành phần phải build.</p>
+      </div>
+      <div class="dec">
+        <p class="q">Transport</p>
+        <h3>WSS hay HTTP long-poll?</h3>
+        <p>WSS cho bidirectional needs_input; HTTP đơn giản hơn nhưng phải poll.</p>
+        <p class="rec">→ đề xuất <b>WSS sau port PoolLink</b>, đổi sau chỉ là adapter.</p>
+      </div>
+      <div class="dec">
+        <p class="q">Source of truth</p>
+        <h3>Postgres, hay Redis là chính?</h3>
+        <p>Cần claim nhanh + status bền + reclaim TTL.</p>
+        <p class="rec">→ đề xuất <b>Postgres = truth (SKIP LOCKED)</b>, Redis chỉ là index tuỳ chọn.</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">roblox-automation · Node Fleet design v1 (pool–pull) · path file là đề xuất, chưa tồn tại trừ khi ghi "hôm nay".</p>
+
+</div>
+
+<script>
+(function(){
+  var KEY='nfa-theme', btn=document.getElementById('themebtn'), root=document.documentElement;
+  function cur(){
+    var t; try{ t=localStorage.getItem(KEY); }catch(e){}
+    if(t==='dark'||t==='light') return t;
+    return matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  }
+  function apply(t){ root.setAttribute('data-theme',t); }
+  try{ var s=localStorage.getItem(KEY); if(s==='dark'||s==='light') apply(s); }catch(e){}
+  btn.addEventListener('click',function(){
+    var next=cur()==='dark'?'light':'dark'; apply(next);
+    try{ localStorage.setItem(KEY,next); }catch(e){}
+  });
+})();
+</script>

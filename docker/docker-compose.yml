@@ -1,0 +1,38 @@
+services:
+  api:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    env_file: ../.env
+    ports: ["8000:8000"]
+    depends_on: [db, redis]
+    environment:
+      DATABASE_URL: postgresql+psycopg://rlx:rlx@db:5432/rlx
+      QUEUE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+
+  worker:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    env_file: ../.env
+    command: ["python", "-m", "app.worker.main"]
+    depends_on: [db, redis]
+    environment:
+      DATABASE_URL: postgresql+psycopg://rlx:rlx@db:5432/rlx
+      QUEUE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+    deploy:
+      replicas: 2
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rlx
+      POSTGRES_PASSWORD: rlx
+      POSTGRES_DB: rlx
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+volumes:
+  pgdata:

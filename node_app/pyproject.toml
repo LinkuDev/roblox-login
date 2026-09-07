@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "roblox-node"
+version = "0.1.0"
+description = "App standalone chay tren may vat ly (node): cau hinh + chay flow + connect toi SaaS pool."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "psutil>=5.9",
+    "pydantic>=2.7",
+    # flow-core (automation/services/providers) se them khi node chay flow that:
+    #   "roblox-login @ {root:parent}"  hoac tach flow-core thanh package rieng.
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2"]
+
+[project.scripts]
+roblox-node = "robloxnode.launcher:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["robloxnode"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

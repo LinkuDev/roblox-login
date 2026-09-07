@@ -11,6 +11,7 @@ def _api_key_for(name: str, settings: Settings) -> str:
         "twocaptcha": settings.keys.twocaptcha_api_key,
         "capsolver": settings.keys.capsolver_api_key,
         "anticaptcha": settings.keys.anticaptcha_api_key,
+        "yescaptcha": settings.keys.yescaptcha_api_key,
         "manual": "",
     }.get(name.lower(), "")
 

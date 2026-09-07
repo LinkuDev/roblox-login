@@ -13,12 +13,9 @@ class DetectLoginResultStep(Step):
     name = "detect_result"
 
     def run(self, ctx: ExecutionContext) -> StepResult:
-        # thanh cong: thay UI dang nhap hoac co cookie session
-        if ctx.get("already_logged_in") or ctx.browser.exists(C.SEL_LOGGED_IN, timeout=10):
-            return self._capture_success(ctx)
-
+        # thanh cong = CO cookie session that (.ROBLOSECURITY). Khong dua vao navbar.
         cookies = ctx.browser.cookies()
-        if C.COOKIE_SESSION in cookies:
+        if ctx.get("already_logged_in") or C.COOKIE_SESSION in cookies:
             return self._capture_success(ctx, cookies)
 
         # that bai: doc thong bao loi de phan loai

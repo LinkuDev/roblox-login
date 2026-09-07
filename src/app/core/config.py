@@ -43,6 +43,7 @@ class ProviderKeys(BaseSettings):
     twocaptcha_api_key: str = ""
     capsolver_api_key: str = ""
     anticaptcha_api_key: str = ""
+    yescaptcha_api_key: str = ""
 
 
 class BrowserSettings(BaseSettings):

@@ -12,8 +12,9 @@ class OpenLoginPageStep(Step):
 
     def run(self, ctx: ExecutionContext) -> StepResult:
         ctx.browser.goto(C.LOGIN_URL, wait=3)
-        # da dang nhap san (profile cu)?
-        if ctx.browser.exists(C.SEL_LOGGED_IN, timeout=2):
+        # da dang nhap san (profile cu)? Kiem tra bang COOKIE session that, KHONG
+        # dua vao navbar - .rbx-navbar co mat ca khi CHUA dang nhap -> de bao nham.
+        if C.COOKIE_SESSION in ctx.browser.cookies():
             ctx.set("already_logged_in", True)
             return StepResult.ok(self.name, "da co phien dang nhap san")
         ctx.browser.wait_for(C.SEL_USERNAME)

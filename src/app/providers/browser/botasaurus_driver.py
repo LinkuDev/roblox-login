@@ -6,7 +6,8 @@ adapter khac va dang ky vao `browser_registry`, flow khong phai sua dong nao.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+import json
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -54,11 +55,55 @@ class BotasaurusSession(BrowserSession):
             return False
 
     def type(self, selector: str, text: str, human: bool = True) -> None:
+        """Dien text vao input va DAM BAO gia tri vao that.
+
+        Input cua Roblox la React-controlled: go phim binh thuong co the bi
+        React "nuot" neu trang chua hydrate -> form van rong. Nen: focus + clear
+        + go phim that, roi VERIFY value; neu van rong thi set qua native setter +
+        dispatch input/change (React moi nhan). Rong sau cung -> BrowserError de
+        flow fail ro rang, khong submit form rong.
+        """
         el = self.wait_for(selector)
+        for prep in ("focus", "clear_input"):
+            fn = getattr(el, prep, None)
+            if callable(fn):
+                with suppress(Exception):  # best effort
+                    fn()
         try:
-            el.type(text)
-        except AttributeError:
-            self._d.type(selector, text)
+            el.send_keys(text)
+        except Exception:  # noqa: BLE001 - fallback duoi se lo
+            with suppress(Exception):
+                self._d.type(selector, text)
+
+        if self._value_of(selector) == text:
+            return
+        # fallback: set value qua native setter + dispatch event cho React
+        self._set_react_value(selector, text)
+        if self._value_of(selector) != text:
+            raise BrowserError(f"khong dien duoc gia tri vao '{selector}'")
+
+    def _value_of(self, selector: str) -> str | None:
+        try:
+            return self.run_js(
+                f"const el=document.querySelector({json.dumps(selector)});"
+                "return el?el.value:null;"
+            )
+        except BrowserError:
+            return None
+
+    def _set_react_value(self, selector: str, text: str) -> None:
+        self.run_js(
+            f"const el=document.querySelector({json.dumps(selector)});"
+            "if(!el)return 'no-el';"
+            "el.focus();"
+            "const p=el instanceof HTMLTextAreaElement"
+            "?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;"
+            "const s=Object.getOwnPropertyDescriptor(p,'value').set;"
+            f"s.call(el,{json.dumps(text)});"
+            "el.dispatchEvent(new Event('input',{bubbles:true}));"
+            "el.dispatchEvent(new Event('change',{bubbles:true}));"
+            "return el.value;"
+        )
 
     def click(self, selector: str, timeout: float | None = None) -> None:
         el = self.wait_for(selector, timeout)

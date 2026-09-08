@@ -143,7 +143,12 @@ class HandleAccountLockedStep(Step):
             st = self._detect_state(ctx)
 
             if st == "unlocked":
-                return StepResult.ok(self.name, "da mo khoa", continues=continue_clicks)
+                # DEBOUNCE: sau khi bam Continue co the transient roi /not-approved
+                # trong khi challenge chua kip len -> xac nhan on dinh moi bao mo khoa.
+                time.sleep(4)
+                if self._detect_state(ctx) == "unlocked":
+                    return StepResult.ok(self.name, "da mo khoa", continues=continue_clicks)
+                continue   # transient -> tiep tuc xu ly (challenge vua hien)
             if st == "need_app":
                 ctx.log.info("account_locked_need_app")
                 return StepResult.skipped(self.name, "doi app mobile - detect_result xu ly")
@@ -199,20 +204,25 @@ class HandleAccountLockedStep(Step):
         except Exception:  # noqa: BLE001 - loi doc DOM -> coi la loading transient
             return "loading"
 
-        if not st.get("notApproved") or st.get("appPromo"):
-            return "unlocked"
-        if st.get("qr"):
-            return "need_app"
+        # THU TU QUAN TRONG: challenge/modal dang hoat dong PHAI duoc uu tien hon tin
+        # hieu URL-roi-not-approved. Sau khi bam Continue, URL co the transient roi
+        # /not-approved trong khi challenge (Arkose/modal) van dang len -> neu check
+        # "unlocked" truoc se thoat SOM -> false success (bug da gap).
+        if st.get("captcha"):
+            return "solving"          # challenge Arkose dang hien -> giai (ke ca URL da doi)
         if st.get("retry"):
             return "retry_prompt"
-        if st.get("captcha"):
-            return "solving"
-        # CO nut Continue bam duoc -> BAM (uu tien hon spinner ngam cua trang)
         if st.get("continueClickable"):
             return "continue_modal"
-        # nut trong modal dang busy/disabled (spinner sau khi bam), HOAC modal trong
-        # ma khong captcha/continue -> dang loading -> cho roi F5
-        if st.get("busy") or st.get("modal"):
+        if st.get("busy"):
+            return "loading"          # nut dang spinner sau khi bam
+        if st.get("qr"):
+            return "need_app"
+        # Chi coi UNLOCKED khi KHONG con challenge/continue/busy/modal ma da roi
+        # not-approved (hoac hien app-promo). Con modal -> loading (cho tiep).
+        if (not st.get("notApproved") or st.get("appPromo")) and not st.get("modal"):
+            return "unlocked"
+        if st.get("modal"):
             return "loading"
         return "unknown"
 

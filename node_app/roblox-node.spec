@@ -21,9 +21,9 @@ datas: list = []
 binaries: list = []
 hiddenimports: list = []
 
-# Chi gom botasaurus_driver (Driver) + uvicorn. KHONG gom goi 'botasaurus' full vi
-# no keo 'javascript_fixes' -> doi Node.js luc import -> vo PyInstaller.
-for pkg in ("botasaurus_driver", "uvicorn"):
+# Chi gom botasaurus_driver (Driver) + uvicorn (+ h11 thuan python). KHONG gom goi
+# 'botasaurus' full vi no keo 'javascript_fixes' -> doi Node.js luc import.
+for pkg in ("botasaurus_driver", "uvicorn", "h11"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -32,6 +32,12 @@ for pkg in ("botasaurus_driver", "uvicorn"):
 # service/provider/step dang ky qua import dong -> ep gom het
 hiddenimports += collect_submodules("app")
 hiddenimports += collect_submodules("robloxnode")
+# uvicorn dung implementation thuan python (h11/asyncio) khi dong goi -> ep co mat
+hiddenimports += [
+    "uvicorn.protocols.http.h11_impl",
+    "uvicorn.loops.asyncio",
+    "uvicorn.lifespan.off",
+]
 
 # Chrome for Testing + extension -> giu nguyen cay thu muc duoi browser/ trong bundle
 trees: list = []

@@ -171,6 +171,8 @@ class HandleAccountLockedStep(Step):
                         return _RESTART   # F5 hoai van loading -> vao lai tu dau
                     ctx.browser.reload()
                     time.sleep(3)
+                    # F5 = coi nhu vao lai tu dau -> RESET deadline ve full timeout
+                    deadline = time.time() + s.timeout + extra_timeout
                 else:
                     time.sleep(self.poll)
                 continue

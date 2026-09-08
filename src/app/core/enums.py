@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from enum import StrEnum
+try:  # StrEnum co tu Python 3.11
+    from enum import StrEnum
+except ImportError:  # Python 3.10 -> fallback tuong duong
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        """Tuong duong enum.StrEnum cho Python 3.10."""
+
+        __str__ = str.__str__
 
 
 class CaptchaType(StrEnum):

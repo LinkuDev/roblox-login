@@ -113,6 +113,51 @@ def _prepare_captcha_extension(
     return dest
 
 
+def _prepare_proxy_extension(proxy: Proxy | None) -> Path | None:
+    """Sinh 1 extension MV3 nho lo PROXY (thay cho botasaurus_proxy_authentication +
+    Node.js): set proxy qua chrome.proxy + tra credential qua onAuthRequired.
+
+    -> KHONG truyen proxy cho Driver (tranh path Node). Extension chi chay headful.
+    Tra ve thu muc tam (caller phai xoa), None neu khong co proxy.
+    """
+    if proxy is None:
+        return None
+    runtime = Path(tempfile.mkdtemp(prefix="rlx-proxy-"))
+    dest = runtime / "ext"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    manifest = {
+        "manifest_version": 3,
+        "name": "rlx-proxy",
+        "version": "1.0",
+        "permissions": ["proxy", "webRequest", "webRequestAuthProvider"],
+        "host_permissions": ["<all_urls>"],
+        "background": {"service_worker": "bg.js"},
+    }
+    (dest / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    cfg = {
+        "scheme": proxy.scheme or "http",
+        "host": proxy.host,
+        "port": int(proxy.port),
+        "user": proxy.username or "",
+        "pass": proxy.password or "",
+    }
+    bg = (
+        "const C=" + json.dumps(cfg) + ";\n"
+        "chrome.proxy.settings.set({value:{mode:'fixed_servers',rules:{"
+        "singleProxy:{scheme:C.scheme,host:C.host,port:C.port},"
+        "bypassList:['localhost','127.0.0.1']}},scope:'regular'},function(){});\n"
+        "if(C.user){"
+        "chrome.webRequest.onAuthRequired.addListener("
+        "function(d){return {authCredentials:{username:C.user,password:C.pass}};},"
+        "{urls:['<all_urls>']},['blocking']);"
+        "}\n"
+    )
+    (dest / "bg.js").write_text(bg, encoding="utf-8")
+    return dest
+
+
 class BotasaurusSession(BrowserSession):
     def __init__(self, driver: Any, settings: BrowserSettings):
         self._d = driver
@@ -431,8 +476,8 @@ class BotasaurusProvider(BrowserProvider):
             # window_size override (vd tiling phone thu nho) -> uu tien.
             "window_size": window_size or self.settings.window,
         }
-        if proxy:
-            opts["proxy"] = proxy.url
+        # PROXY: KHONG truyen cho Driver (proxy co user:pass se keo botasaurus dung
+        # Node.js). Thay vao do dung 1 extension MV3 tu lo proxy + auth (xem duoi).
         if ua := (user_agent or self.settings.user_agent):
             opts["user_agent"] = ua
         if profile:
@@ -456,8 +501,16 @@ class BotasaurusProvider(BrowserProvider):
             self.settings.captcha_client_key,
             self.settings.captcha_config_overrides,
         )
-        if ext_runtime is not None:
-            opts["extensions"] = [_LoadableExtension(ext_runtime)]
+        # Proxy extension (thay Node): set proxy + auth in-browser.
+        proxy_runtime = _prepare_proxy_extension(proxy)
+
+        exts = [
+            _LoadableExtension(d)
+            for d in (ext_runtime, proxy_runtime)
+            if d is not None
+        ]
+        if exts:
+            opts["extensions"] = exts
             opts["headless"] = False  # extension khong hoat dong o headless cu
 
         opts.update(kwargs)
@@ -472,6 +525,7 @@ class BotasaurusProvider(BrowserProvider):
             yield session
         finally:
             session.close()
-            if ext_runtime is not None:
-                # ext_runtime = <tmp>/ext -> xoa ca thu muc tam goc
-                shutil.rmtree(ext_runtime.parent, ignore_errors=True)
+            # xoa cac thu muc tam extension (yescaptcha + proxy). moi cai la <tmp>/ext.
+            for d in (ext_runtime, proxy_runtime):
+                if d is not None:
+                    shutil.rmtree(d.parent, ignore_errors=True)

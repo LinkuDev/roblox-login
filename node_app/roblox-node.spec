@@ -21,9 +21,9 @@ datas: list = []
 binaries: list = []
 hiddenimports: list = []
 
-# Chi gom botasaurus_driver (Driver) + uvicorn (+ h11 thuan python). KHONG gom goi
-# 'botasaurus' full vi no keo 'javascript_fixes' -> doi Node.js luc import.
-# websocket = websocket-client, botasaurus_driver dung de noi CDP toi Chrome.
+# Chi gom botasaurus_driver (Driver) + uvicorn (+ h11 thuan python) + websocket.
+# Proxy auth KHONG dung botasaurus_proxy_authentication/javascript_fixes/Node.js nua
+# -> tu lo bang 1 extension MV3 (xem providers/browser). Nen exe van KHONG can Node.
 for pkg in ("botasaurus_driver", "uvicorn", "h11", "websocket"):
     d, b, h = collect_all(pkg)
     datas += d
@@ -58,8 +58,8 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    # 'botasaurus' full + 'javascript_fixes' can Node.js -> loai khoi bundle
-    # (flow chi dung 'botasaurus_driver').
+    # Loai 'botasaurus' full + 'javascript_fixes' (can Node.js) -> flow dung
+    # 'botasaurus_driver' truc tiep, proxy auth lo bang extension MV3 (khong Node).
     excludes=["botasaurus", "javascript_fixes"],
     noarchive=False,
 )

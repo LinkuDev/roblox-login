@@ -39,13 +39,22 @@ class PoolAddBody(BaseModel):
 class _ProxyRotator:
     """Xoay proxy: cu N spawn dung 1 proxy roi sang proxy tiep theo (vong lai).
 
+    TRUOC KHI dua vao runner: TEST LIVE proxy (TCP connect). Chet -> BO QUA, nhay
+    sang proxy tiep theo. Ket qua health cache theo TTL de khoi test lai lien tuc.
+
     Doc config MOI luot pick -> UI cap nhat proxies/rotate_every co hieu luc ngay.
     Thread-safe (spawn chay o nhieu thread).
     """
 
+    health_ttl = 120.0   # giay: cache ket qua song/chet
+    connect_timeout = 6.0
+
     def __init__(self) -> None:
+        import threading
+
         self._count = 0
-        self._lock = __import__("threading").Lock()
+        self._lock = threading.Lock()
+        self._health: dict[str, tuple[bool, float]] = {}   # proxy_line -> (alive, ts)
 
     def pick(self) -> str | None:
         with self._lock:
@@ -54,9 +63,38 @@ class _ProxyRotator:
             if not proxies:
                 return None
             every = max(1, int(cfg.proxy_rotate_every))
-            idx = (self._count // every) % len(proxies)
+            start = (self._count // every) % len(proxies)
             self._count += 1
-            return proxies[idx]
+
+        # test tu proxy dang toi luot, chet thi nhay sang cai ke -> cai nao die thi ignore
+        n = len(proxies)
+        for off in range(n):
+            proxy = proxies[(start + off) % n]
+            if self._alive(proxy):
+                return proxy
+        return None   # tat ca proxy deu chet -> chay khong proxy
+
+    def _alive(self, proxy_line: str) -> bool:
+        now = __import__("time").time()
+        cached = self._health.get(proxy_line)
+        if cached and now - cached[1] < self.health_ttl:
+            return cached[0]
+        ok = self._tcp_check(proxy_line)
+        self._health[proxy_line] = (ok, now)
+        return ok
+
+    def _tcp_check(self, proxy_line: str) -> bool:
+        """TCP connect toi host:port cua proxy -> song/chet. Nhanh, khong can Node."""
+        import socket
+
+        from app.domain.models import Proxy
+
+        try:
+            p = Proxy.parse(proxy_line)
+            with socket.create_connection((p.host, p.port), timeout=self.connect_timeout):
+                return True
+        except (OSError, ValueError):
+            return False
 
 
 def build_app() -> FastAPI:

@@ -376,13 +376,18 @@ $('clearres').addEventListener('click',async()=>{
   await fetch('/api/results/clear',{method:'POST'}); loadResults();
 });
 $('export').addEventListener('click',()=>{
-  const head='username,status,error,reason,roblosecurity,ts\n';
-  const body=lastRows.map(r=>[r.username,r.status,r.error||'',(r.reason||'').replace(/[\r\n,]/g,' '),r.roblosecurity||'',r.ts||''].map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
-  const blob=new Blob([head+body],{type:'text/csv'});
+  const NL=String.fromCharCode(10);
+  const cell=x=>'"'+String(x==null?'':x).split('"').join('""')+'"';
+  const cols=['username','status','error','reason','roblosecurity','ts'];
+  const head=cols.map(cell).join(',');
+  const body=lastRows.map(r=>[r.username,r.status,r.error||'',r.reason||'',r.roblosecurity||'',r.ts||''].map(cell).join(',')).join(NL);
+  const blob=new Blob([head+NL+body],{type:'text/csv'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='roblox-results-'+Date.now()+'.csv'; a.click(); URL.revokeObjectURL(a.href);
 });
 
-loadConfig().then(()=>{poll();loadResults();setInterval(poll,1000);setInterval(loadResults,2500);});
+loadConfig().catch(e=>console.error('loadConfig',e));
+poll(); loadResults();
+setInterval(poll,1000); setInterval(loadResults,2500);
 </script>
 </body></html>"""

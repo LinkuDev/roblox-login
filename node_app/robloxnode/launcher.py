@@ -78,7 +78,19 @@ def _wait_up(port: int, tries: int = 100) -> None:
 def main() -> None:
     port = _free_port()
     server = uvicorn.Server(
-        uvicorn.Config(build_app(), host="127.0.0.1", port=port, log_level="warning")
+        uvicorn.Config(
+            build_app(),
+            host="127.0.0.1",
+            port=port,
+            log_level="warning",
+            # Ep implementation THUAN PYTHON de dong goi PyInstaller chay duoc:
+            # httptools/websockets/uvloop la goi C ngoai, khong bundle -> request
+            # rot vao hu khong (trang trang) du port da mo.
+            loop="asyncio",
+            http="h11",
+            ws="none",
+            lifespan="off",
+        )
     )
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()

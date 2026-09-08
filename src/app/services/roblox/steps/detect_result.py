@@ -18,19 +18,21 @@ class DetectLoginResultStep(Step):
     def run(self, ctx: ExecutionContext) -> StepResult:
         self._wait_settle(ctx)   # tranh doc qua som -> "khong ro nguyen nhan"
         body = ctx.browser.text_of("body").lower()
-        # Man app-promo mobile ("Continue in browser") = XUAT HIEN SAU khi giai xong
-        # -> coi la THANH CONG (khac han man /not-approved doi quet QR).
-        app_promo = "continue in browser" in body
+
+        # QR = UU TIEN CAO NHAT -> FAILED (need app), BAT KE co text app-promo hay khong.
+        # Luu y: man QR ("Confirm you're human with the mobile app" + scan QR) co the
+        # KEM text "continue in app" -> khong duoc de app-promo che mat -> check QR TRUOC.
+        if any(k in body for k in ("scan this qr", "qr code")):
+            ctx.snapshot("account_locked")
+            raise NeedMobileApp("failed because need app", detail="qr")
+
+        # Man app-promo ("Explore Roblox in our mobile app" / Continue in App/browser)
+        # o route "/" = XUAT HIEN SAU khi giai xong -> THANH CONG (da loai QR o tren).
+        app_promo = any(t in body for t in C.APP_PROMO_TEXTS)
 
         # Van ket o man "Account locked" (/not-approved) = CHUA thanh cong, du co
         # cookie. Tru khi da la man app-promo (da giai xong).
         if C.NOT_APPROVED_PATH in ctx.browser.current_url() and not app_promo:
-            # Bien the doi xac thuc bang APP MOBILE (QUET QR) - khong co nut de bam
-            # -> automation bo tay, danh dau fail rieng de update record.
-            if any(k in body for k in ("scan this qr", "qr code")):
-                ctx.snapshot("account_locked")
-                raise NeedMobileApp("failed because need app", detail="not-approved: qr")
-
             # DETECTOR TRUOC KHI CLOSE: dang o /not-approved (co the modal loading /
             # captcha reset) ma KHONG phai QR -> coi nhu con o luong not-approved,
             # QUAY LAI luong tu dau (1 lan) truoc khi ket luan khoa. HandleAccountLocked
@@ -85,7 +87,7 @@ class DetectLoginResultStep(Step):
             if "/home" in url:                        # da vao home -> logged in
                 return
             body = ctx.browser.text_of("body").lower()
-            if "continue in browser" in body:         # app-promo (da mo khoa) -> terminal
+            if any(t in body for t in C.APP_PROMO_TEXTS):  # app-promo (da mo khoa) -> terminal
                 return
             if any(k in body for k in ("scan this qr", "qr code")):  # QR -> terminal
                 return

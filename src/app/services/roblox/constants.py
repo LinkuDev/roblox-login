@@ -59,6 +59,17 @@ MOBILE_CLIENT_HINTS = {
     "nav_platform": "Linux armv8l",
 }
 
+# Man APP-PROMO ("Explore Roblox in our mobile app" - Continue in App/browser) hien
+# o route "/" SAU KHI giai/dang nhap xong (do dung mobile UA) -> tin hieu THANH CONG.
+# Khac han man /not-approved doi QUET QR (do la fail). Bat rong cac text de chac.
+APP_PROMO_TEXTS = (
+    "continue in browser",
+    "continue in app",
+    "explore roblox in our mobile app",
+    "roblox for ios",
+    "roblox for android",
+)
+
 # Roblox dung Arkose Labs FunCaptcha
 CAPTCHA_TYPE = CaptchaType.FUNCAPTCHA
 # Public key Arkose cua Roblox (login). CAN kiem tra lai - Roblox co the doi.

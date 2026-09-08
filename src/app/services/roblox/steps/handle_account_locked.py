@@ -51,7 +51,7 @@ _STATE_JS = (
     f"const captcha=!!document.querySelector({json.dumps(C.SEL_CAPTCHA_FRAME)});"
     "return {"
     "notApproved: url.includes('/not-approved'),"
-    "appPromo: body.includes('continue in browser'),"
+    f"appPromo: {json.dumps(list(C.APP_PROMO_TEXTS))}.some(t=>body.includes(t)),"
     "qr: body.includes('scan this qr')||body.includes('qr code'),"
     "retry: body.includes('try unlocking again')||body.includes(\"weren't able to unlock\"),"
     "captcha: captcha,"

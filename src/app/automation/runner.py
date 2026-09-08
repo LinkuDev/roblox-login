@@ -41,7 +41,16 @@ def run_service(
     browser_provider = build_browser(settings=settings)
     storage = LocalStorage()
 
-    proxy = proxy_provider.acquire(key=credential.username)
+    # Proxy tuong minh tu options (vd node xoay proxy) uu tien hon provider.
+    proxy_opt = options.get("proxy")
+    if proxy_opt:
+        from app.domain.models import Proxy
+
+        proxy = Proxy.parse(proxy_opt) if isinstance(proxy_opt, str) else proxy_opt
+        proxy_from_provider = False
+    else:
+        proxy = proxy_provider.acquire(key=credential.username)
+        proxy_from_provider = True
     log.info(
         "run_start",
         service=service_id,
@@ -75,7 +84,7 @@ def run_service(
             if result.success and ctx.session.cookies and "session" not in result.data:
                 result.data["session"] = ctx.session.to_dict()
     finally:
-        if proxy:
+        if proxy and proxy_from_provider:
             proxy_provider.release(proxy, healthy=True)
         solver.close()
 

@@ -23,7 +23,7 @@ def _build_solver(cfg: NodeConfig):
         return None
 
 
-def real_flow(record: Record, placement: dict | None = None) -> dict:
+def real_flow(record: Record, placement: dict | None = None, proxy: str | None = None) -> dict:
     try:
         from app.automation.runner import run_service
         from app.core.config import Settings
@@ -59,6 +59,8 @@ def real_flow(record: Record, placement: dict | None = None) -> dict:
     # placement (vi tri + kich thuoc cua so) tu bo chia o luoi cua agent -> spawn
     # khong de nhau, cua so = dien thoai thu nho.
     options = dict(placement or {})
+    if proxy:   # proxy da xoay tu node -> dung cho phien nay
+        options["proxy"] = proxy
 
     cred = Credential(username=record.username, password=record.password)
     result = run_service(

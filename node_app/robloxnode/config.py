@@ -44,6 +44,12 @@ class NodeConfig:
     # kich thuoc man hinh de tinh luoi; 0 = tu do
     screen_w: int = 0
     screen_h: int = 0
+    # 6. XOAY PROXY: danh sach proxy (moi dong 1 proxy, 4 dinh dang deu duoc:
+    #    ip:port:user:pass | user:pass@ip:port | protocol://ip:port:user:pass |
+    #    protocol://user:pass@ip:port). Rong = khong dung proxy.
+    proxies: str = ""
+    # Cu N browser (spawn) thi doi sang proxy tiep theo. Mac dinh 30.
+    proxy_rotate_every: int = 30
     # tien ich khac (de san)
     node_name: str = field(default_factory=_default_node_name)
 
@@ -80,7 +86,25 @@ class NodeConfig:
         self.pool_url = self.pool_url.strip()
         self.captcha_key = self.captcha_key.strip()
         self.captcha_provider = (self.captcha_provider or "yescaptcha").strip()
+        self.proxies = (self.proxies or "").strip()
+        self.proxy_rotate_every = max(1, min(1000, int(self.proxy_rotate_every)))
         return self
+
+    def proxy_list(self) -> list[str]:
+        """Cac dong proxy hop le (bo trong / comment / dong sai dinh dang)."""
+        from app.domain.models import Proxy
+
+        out: list[str] = []
+        for raw in (self.proxies or "").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                Proxy.parse(line)   # validate
+                out.append(line)
+            except (ValueError, Exception):  # noqa: BLE001 - dong sai -> bo qua
+                continue
+        return out
 
 
 # danh sach nha captcha cho dropdown - trc mat chi yescaptcha

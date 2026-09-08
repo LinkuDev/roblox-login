@@ -28,10 +28,35 @@ class ConfigBody(BaseModel):
     max_concurrent: int = 10
     win_w: int = 340
     win_h: int = 620
+    proxies: str = ""
+    proxy_rotate_every: int = 30
 
 
 class PoolAddBody(BaseModel):
     lines: str = ""
+
+
+class _ProxyRotator:
+    """Xoay proxy: cu N spawn dung 1 proxy roi sang proxy tiep theo (vong lai).
+
+    Doc config MOI luot pick -> UI cap nhat proxies/rotate_every co hieu luc ngay.
+    Thread-safe (spawn chay o nhieu thread).
+    """
+
+    def __init__(self) -> None:
+        self._count = 0
+        self._lock = __import__("threading").Lock()
+
+    def pick(self) -> str | None:
+        with self._lock:
+            cfg = NodeConfig.load()
+            proxies = cfg.proxy_list()
+            if not proxies:
+                return None
+            every = max(1, int(cfg.proxy_rotate_every))
+            idx = (self._count // every) % len(proxies)
+            self._count += 1
+            return proxies[idx]
 
 
 def build_app() -> FastAPI:
@@ -39,7 +64,15 @@ def build_app() -> FastAPI:
 
     pool = LocalPool()   # RONG: chua co pool that. Nap record test qua /api/pool/add
     # mac dinh chay flow THAT (mo Chrome). Dat RLX_NODE_FLOW=stub de gia lap khong browser.
-    run_flow = stub_flow if os.environ.get("RLX_NODE_FLOW") == "stub" else real_flow
+    base_flow = stub_flow if os.environ.get("RLX_NODE_FLOW") == "stub" else real_flow
+
+    # XOAY PROXY: state (counter) song o node, chia se qua cac spawn (provider build
+    # moi moi lan chay -> khong giu duoc counter). Cu proxy_rotate_every browser thi
+    # doi sang proxy tiep theo; wrap quanh vong danh sach.
+    _rot = _ProxyRotator()
+
+    def run_flow(record, placement=None):   # wrap: bom proxy da xoay vao flow
+        return base_flow(record, placement, proxy=_rot.pick())
 
     def _make_layout() -> SlotAllocator:
         c = NodeConfig.load()
@@ -90,6 +123,8 @@ def build_app() -> FastAPI:
         cfg.max_concurrent = body.max_concurrent
         cfg.win_w = body.win_w
         cfg.win_h = body.win_h
+        cfg.proxies = body.proxies
+        cfg.proxy_rotate_every = body.proxy_rotate_every
         path = cfg.normalized().save()
         return JSONResponse({"ok": True, "path": str(path)})
 
@@ -269,6 +304,14 @@ _PAGE = """<!doctype html>
           <input id="win_h" type="number" min="300" max="1600" step="10" style="width:80px">
         </div>
       </div>
+      <div class="row">
+        <label>Proxy (mỗi dòng 1 proxy) — để trống = không dùng proxy</label>
+        <textarea id="proxies" rows="4" placeholder="ip:port:user:pass&#10;user:pass@ip:port&#10;protocol://ip:port:user:pass&#10;protocol://user:pass@ip:port"></textarea>
+      </div>
+      <div class="row">
+        <label>Cứ bao nhiêu browser thì đổi proxy (mặc định 30)</label>
+        <input id="proxy_rotate_every" type="number" min="1" max="1000" step="1">
+      </div>
       <button class="save" id="save">Lưu cấu hình</button>
       <div class="savedmsg" id="saved"></div>
     </div>
@@ -318,6 +361,8 @@ async function loadConfig(){
   $('max_concurrent').value=c.max_concurrent||10;
   $('win_w').value=c.win_w||900;
   $('win_h').value=c.win_h||760;
+  $('proxies').value=c.proxies||'';
+  $('proxy_rotate_every').value=c.proxy_rotate_every||30;
   drawThresh();
 }
 function drawThresh(){$('thresh').style.left=(+$('ram_range').value)+'%';}
@@ -328,7 +373,8 @@ $('togglekey').addEventListener('click',()=>{const k=$('captcha_key'),b=$('toggl
 $('save').addEventListener('click',async()=>{
   const body={pool_url:$('pool_url').value,captcha_provider:$('captcha_provider').value,
     captcha_key:$('captcha_key').value,ram_overflow_percent:+$('ram_range').value,
-    max_concurrent:+$('max_concurrent').value,win_w:+$('win_w').value,win_h:+$('win_h').value};
+    max_concurrent:+$('max_concurrent').value,win_w:+$('win_w').value,win_h:+$('win_h').value,
+    proxies:$('proxies').value,proxy_rotate_every:+$('proxy_rotate_every').value};
   const j=await(await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
   $('saved').textContent=j.ok?'✓ Đã lưu':'Lỗi'; setTimeout(()=>$('saved').textContent='',1800);
 });

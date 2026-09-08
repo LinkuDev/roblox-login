@@ -309,10 +309,12 @@ class BotasaurusProvider(BrowserProvider):
         **kwargs: Any,
     ):
         try:
-            from botasaurus.browser import Driver
+            # Dung botasaurus_driver truc tiep (khong qua goi 'botasaurus' full -> tranh
+            # phu thuoc javascript_fixes/Node.js khi dong goi PyInstaller).
+            from botasaurus_driver import Driver
         except ImportError as exc:  # pragma: no cover
             raise BrowserError(
-                "chua cai botasaurus. Chay: pip install botasaurus botasaurus-driver"
+                "chua cai botasaurus-driver. Chay: pip install botasaurus-driver"
             ) from exc
 
         want_headless = self.settings.headless if headless is None else headless

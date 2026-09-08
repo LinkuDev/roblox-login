@@ -21,8 +21,9 @@ datas: list = []
 binaries: list = []
 hiddenimports: list = []
 
-# thu vien co data files / submodule dong -> gom day du
-for pkg in ("botasaurus", "botasaurus_driver", "uvicorn"):
+# Chi gom botasaurus_driver (Driver) + uvicorn. KHONG gom goi 'botasaurus' full vi
+# no keo 'javascript_fixes' -> doi Node.js luc import -> vo PyInstaller.
+for pkg in ("botasaurus_driver", "uvicorn"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -50,7 +51,9 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    # 'botasaurus' full + 'javascript_fixes' can Node.js -> loai khoi bundle
+    # (flow chi dung 'botasaurus_driver').
+    excludes=["botasaurus", "javascript_fixes"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

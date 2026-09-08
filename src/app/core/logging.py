@@ -39,7 +39,9 @@ def setup_logging(level: str | None = None, json_output: bool | None = None) -> 
     structlog.configure(
         processors=processors,
         wrapper_class=structlog.make_filtering_bound_logger(
-            logging.getLevelNamesMapping()[level.upper()]
+            # getattr(logging, "INFO"/... ) -> so level; chay ca 3.10 (getLevelNamesMapping
+            # chi co tu 3.11).
+            getattr(logging, level.upper(), logging.INFO)
         ),
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,

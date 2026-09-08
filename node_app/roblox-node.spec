@@ -23,7 +23,8 @@ hiddenimports: list = []
 
 # Chi gom botasaurus_driver (Driver) + uvicorn (+ h11 thuan python). KHONG gom goi
 # 'botasaurus' full vi no keo 'javascript_fixes' -> doi Node.js luc import.
-for pkg in ("botasaurus_driver", "uvicorn", "h11"):
+# websocket = websocket-client, botasaurus_driver dung de noi CDP toi Chrome.
+for pkg in ("botasaurus_driver", "uvicorn", "h11", "websocket"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

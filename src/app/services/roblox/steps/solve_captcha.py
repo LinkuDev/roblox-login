@@ -1,11 +1,16 @@
-"""Step giai captcha - day la vi du cach step goi solver qua PORT.
+"""Step giai captcha.
 
-Luong that te voi Arkose FunCaptcha co the phuc tap hon (lay blob tu
-enforcement, inject token vao callback). Phan lay blob/inject de TODO ro rang
-vi phu thuoc vao chi tiet runtime cua Roblox tai thoi diem chay.
+2 che do:
+- EXTENSION (uu tien): extension YesCaptcha nap trong browser tu giai Arkose
+  in-page. Step chi CHO toi khi khung captcha bien mat / co cookie (khong goi API).
+- API (cu): goi solver qua PORT roi inject token. Phan lay blob/inject con TODO
+  vi phu thuoc runtime Roblox.
 """
 
 from __future__ import annotations
+
+import time
+from pathlib import Path
 
 from app.automation.context import ExecutionContext
 from app.automation.result import StepResult
@@ -23,10 +28,39 @@ class SolveCaptchaStep(Step):
     def should_run(self, ctx: ExecutionContext) -> bool:
         if ctx.get("already_logged_in"):
             return False
-        # chi chay khi phat hien khung captcha
-        return ctx.browser.exists(C.SEL_CAPTCHA_FRAME, timeout=5)
+        # chi chay khi phat hien khung captcha (Arkose co the load cham hon 5s)
+        return ctx.browser.exists(C.SEL_CAPTCHA_FRAME, timeout=10)
 
     def run(self, ctx: ExecutionContext) -> StepResult:
+        if self._extension_mode(ctx):
+            return self._wait_for_extension(ctx)
+        return self._solve_via_api(ctx)
+
+    # --- che do EXTENSION ---------------------------------------------------
+    def _extension_mode(self, ctx: ExecutionContext) -> bool:
+        d = ctx.settings.browser.captcha_extension_dir
+        return bool(d and Path(d).exists())
+
+    def _wait_for_extension(self, ctx: ExecutionContext) -> StepResult:
+        """Cho extension YesCaptcha tu giai captcha in-page.
+
+        Ket thuc som khi: co cookie session (da qua), hoac khung captcha bien mat.
+        Het thoi gian -> fail (optional -> khong lam sap flow, detect_result quyet).
+        """
+        s = ctx.settings.captcha
+        deadline = time.time() + s.timeout
+        ctx.log.info("captcha_wait_extension", timeout=s.timeout)
+        while time.time() < deadline:
+            if C.COOKIE_SESSION in ctx.browser.cookies():
+                return StepResult.ok(self.name, "extension giai xong (co cookie session)")
+            if not ctx.browser.exists(C.SEL_CAPTCHA_FRAME, timeout=0):
+                return StepResult.ok(self.name, "khung captcha da bien mat (extension xu ly)")
+            time.sleep(s.poll_interval)
+        ctx.snapshot("captcha_timeout")
+        return StepResult.failed(self.name, "extension khong giai kip captcha", "captcha_timeout")
+
+    # --- che do API (cu) ----------------------------------------------------
+    def _solve_via_api(self, ctx: ExecutionContext) -> StepResult:
         blob = self._extract_blob(ctx)
 
         task = CaptchaTask(

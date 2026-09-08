@@ -10,6 +10,7 @@ from app.services.roblox.steps import (
     DetectLoginResultStep,
     FillCredentialsStep,
     Handle2FAStep,
+    HandleAccountLockedStep,
     OpenLoginPageStep,
     SolveCaptchaStep,
     SubmitLoginStep,
@@ -38,6 +39,7 @@ class RobloxLoginService(Service):
                 SubmitLoginStep(),
                 SolveCaptchaStep(),   # tu bo qua neu khong co captcha
                 Handle2FAStep(),      # tu bo qua neu khong bat 2FA
+                HandleAccountLockedStep(),  # man /not-approved: Continue -> Arkose
                 DetectLoginResultStep(),
             ],
         )

@@ -11,6 +11,8 @@ from app.core.enums import CaptchaType
 BASE_URL = "https://www.roblox.com"
 LOGIN_URL = f"{BASE_URL}/login"
 HOME_URL = f"{BASE_URL}/home"
+# Sau login co the bi chuyen sang man "Account locked" (xac nhan human bang Arkose).
+NOT_APPROVED_PATH = "/not-approved"
 
 # Roblox dung Arkose Labs FunCaptcha
 CAPTCHA_TYPE = CaptchaType.FUNCAPTCHA

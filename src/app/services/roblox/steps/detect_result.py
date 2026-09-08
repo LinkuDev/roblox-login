@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.automation.context import ExecutionContext
 from app.automation.result import StepResult
 from app.automation.step import Step
-from app.core.errors import AccountLocked, InvalidCredentials, RateLimited
+from app.core.errors import AccountLocked, InvalidCredentials, NeedMobileApp, RateLimited
 from app.services.roblox import constants as C
 
 
@@ -13,6 +13,17 @@ class DetectLoginResultStep(Step):
     name = "detect_result"
 
     def run(self, ctx: ExecutionContext) -> StepResult:
+        # Van ket o man "Account locked" (/not-approved) = CHUA thanh cong, du co
+        # cookie. Tranh bao success gia khi Arkose mo khoa chua qua.
+        if C.NOT_APPROVED_PATH in ctx.browser.current_url():
+            ctx.snapshot("account_locked")
+            body = ctx.browser.text_of("body").lower()
+            # Bien the doi xac thuc bang APP MOBILE (quet QR) - khong co nut de bam
+            # -> automation bo tay, danh dau fail rieng de update record.
+            if any(k in body for k in ("mobile app", "qr code", "scan this qr")):
+                raise NeedMobileApp("failed because need app", detail="not-approved: mobile app")
+            raise AccountLocked("tai khoan bi khoa - chua mo duoc", detail=C.NOT_APPROVED_PATH)
+
         # thanh cong = CO cookie session that (.ROBLOSECURITY). Khong dua vao navbar.
         cookies = ctx.browser.cookies()
         if ctx.get("already_logged_in") or C.COOKIE_SESSION in cookies:

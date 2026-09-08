@@ -74,10 +74,9 @@ def _wait_up(port: int, tries: int = 200) -> bool:
     truoc khi server san sang khien trang trang."""
     url = f"http://127.0.0.1:{port}/"
     for _ in range(tries):
-        with contextlib.suppress(Exception):
-            with urllib.request.urlopen(url, timeout=0.4) as r:  # noqa: S310
-                if getattr(r, "status", 200) == 200:
-                    return True
+        with contextlib.suppress(Exception), urllib.request.urlopen(url, timeout=0.4) as r:  # noqa: S310
+            if getattr(r, "status", 200) == 200:
+                return True
         time.sleep(0.1)
     return False
 

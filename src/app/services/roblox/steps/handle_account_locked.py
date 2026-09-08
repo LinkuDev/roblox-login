@@ -36,25 +36,29 @@ _CLICK_CONTINUE = (
 )
 
 # Chup TOAN BO trang thai man /not-approved trong 1 lan run_js (nhanh, nhat quan).
+# LUU Y: KHONG bat spinner ngam cua trang (footer/lazy-load) -> tranh false "loading"
+# khi nut Continue van bam duoc. Chi coi "busy" khi CHINH nut trong modal disabled/
+# aria-busy (spinner ben trong nut sau khi bam).
 _STATE_JS = (
     "const url=location.href.toLowerCase();"
     "const body=(document.body.innerText||'').toLowerCase();"
+    "const vis=el=>!!(el&&(el.offsetParent!==null||el.getClientRects().length));"
     "const btns=[...document.querySelectorAll('button,[role=button]')];"
     "const cont=btns.find(x=>(x.innerText||'').trim().toLowerCase()==='continue');"
+    "const continueClickable=!!(cont&&!cont.disabled&&"
+    "cont.getAttribute('aria-busy')!=='true'&&vis(cont));"
+    "const busy=btns.some(x=>vis(x)&&(x.disabled||x.getAttribute('aria-busy')==='true'));"
     f"const captcha=!!document.querySelector({json.dumps(C.SEL_CAPTCHA_FRAME)});"
-    "const spin=!!document.querySelector("
-    "'[class*=spinner],[class*=Spinner],[aria-busy=\"true\"],svg[class*=spin],"
-    "[class*=loading],[class*=Loading]');"
     "return {"
     "notApproved: url.includes('/not-approved'),"
     "appPromo: body.includes('continue in browser'),"
     "qr: body.includes('scan this qr')||body.includes('qr code'),"
     "retry: body.includes('try unlocking again')||body.includes(\"weren't able to unlock\"),"
     "captcha: captcha,"
-    "continue: !!cont,"
-    "spinner: spin || (cont && (cont.disabled || cont.getAttribute('aria-busy')==='true')),"
+    "continueClickable: continueClickable,"
+    "busy: busy,"
     "modal: !!document.querySelector("
-    "\"[role=dialog],[class*=modal],[data-internal-page-name='NotApproved']\")"
+    "\"[role=dialog],[data-internal-page-name='NotApproved']\")"
     "};"
 )
 
@@ -203,10 +207,12 @@ class HandleAccountLockedStep(Step):
             return "retry_prompt"
         if st.get("captcha"):
             return "solving"
-        if st.get("continue") and not st.get("spinner"):
+        # CO nut Continue bam duoc -> BAM (uu tien hon spinner ngam cua trang)
+        if st.get("continueClickable"):
             return "continue_modal"
-        # co spinner, HOAC modal ma khong captcha/continue -> dang loading
-        if st.get("spinner") or st.get("modal"):
+        # nut trong modal dang busy/disabled (spinner sau khi bam), HOAC modal trong
+        # ma khong captcha/continue -> dang loading -> cho roi F5
+        if st.get("busy") or st.get("modal"):
             return "loading"
         return "unknown"
 

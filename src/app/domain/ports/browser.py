@@ -44,6 +44,9 @@ class BrowserSession(ABC):
     @abstractmethod
     def cookies(self) -> dict[str, str]: ...
 
+    def clear_cookies(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
+        """Xoa cookie phien hien tai (provider override neu ho tro)."""
+
     @abstractmethod
     def user_agent(self) -> str: ...
 

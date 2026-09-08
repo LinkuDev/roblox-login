@@ -25,6 +25,20 @@ def _free_port() -> int:
 
 
 def _find_chrome() -> str | None:
+    # Uu tien Chrome for Testing di kem (bundle) -> app that su standalone,
+    # khong phu thuoc Chrome he thong.
+    try:
+        from app.core.config import default_chrome_path
+
+        p = default_chrome_path()
+        if p.exists():
+            with contextlib.suppress(OSError):
+                import stat
+
+                p.chmod(p.stat().st_mode | stat.S_IXUSR)
+            return str(p)
+    except Exception:  # flow-core chua co (dev thuan node) -> fallback he thong
+        pass
     for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
         path = shutil.which(name)
         if path:
@@ -54,9 +68,10 @@ def _open_window(url: str) -> subprocess.Popen | None:
 
 def _wait_up(port: int, tries: int = 100) -> None:
     for _ in range(tries):
-        with contextlib.suppress(OSError):
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                return
+        with contextlib.suppress(OSError), socket.create_connection(
+            ("127.0.0.1", port), timeout=0.2
+        ):
+            return
         time.sleep(0.1)
 
 

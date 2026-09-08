@@ -56,6 +56,8 @@ def run_service(
             proxy=proxy,
             headless=headless,
             profile=options.get("profile"),
+            window_position=options.get("window_position"),
+            window_size=options.get("window_size"),
         ) as browser:
             ctx = ExecutionContext(
                 credential=credential,

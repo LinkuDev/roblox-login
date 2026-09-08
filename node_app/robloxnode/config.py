@@ -21,6 +21,10 @@ def default_config_path() -> Path:
     return Path.home() / ".roblox-node" / "config.json"
 
 
+def _default_node_name() -> str:
+    return os.uname().nodename if hasattr(os, "uname") else "node"
+
+
 @dataclass
 class NodeConfig:
     # 1. connect toi pool (phase sau)
@@ -30,8 +34,17 @@ class NodeConfig:
     captcha_key: str = ""
     # 3. tai nguyen: RAM vuot nguong nay (%) -> node "day", ngung claim toi khi tut xuong
     ram_overflow_percent: int = 85
+    # 4. song song: so phien browser toi da chay cung luc (kem RAM gate o tren)
+    max_concurrent: int = 10
+    # 5. cua so spawn = dien thoai thu nho, xep luoi khong de nhau
+    win_w: int = 340
+    win_h: int = 620
+    win_gap: int = 6
+    # kich thuoc man hinh de tinh luoi; 0 = tu do
+    screen_w: int = 0
+    screen_h: int = 0
     # tien ich khac (de san)
-    node_name: str = field(default_factory=lambda: os.uname().nodename if hasattr(os, "uname") else "node")
+    node_name: str = field(default_factory=_default_node_name)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -57,6 +70,12 @@ class NodeConfig:
     # --- validate nhe cho form ---
     def normalized(self) -> NodeConfig:
         self.ram_overflow_percent = max(10, min(99, int(self.ram_overflow_percent)))
+        self.max_concurrent = max(1, min(200, int(self.max_concurrent)))
+        self.win_w = max(200, min(1200, int(self.win_w)))
+        self.win_h = max(300, min(1600, int(self.win_h)))
+        self.win_gap = max(0, min(80, int(self.win_gap)))
+        self.screen_w = max(0, int(self.screen_w))
+        self.screen_h = max(0, int(self.screen_h))
         self.pool_url = self.pool_url.strip()
         self.captcha_key = self.captcha_key.strip()
         self.captcha_provider = (self.captcha_provider or "yescaptcha").strip()

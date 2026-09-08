@@ -12,8 +12,8 @@ import time
 from robloxnode.pool import Record
 
 
-def stub_flow(record: Record) -> dict:
-    """Gia lap 1 flow: ton ~1.5-4s, ~85% thanh cong."""
+def stub_flow(record: Record, placement: dict | None = None) -> dict:
+    """Gia lap 1 flow: ton ~1.5-4s, ~85% thanh cong. (placement bo qua o stub)"""
     time.sleep(random.uniform(1.5, 4.0))
     ok = random.random() > 0.15
     if ok:

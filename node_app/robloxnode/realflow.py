@@ -23,9 +23,10 @@ def _build_solver(cfg: NodeConfig):
         return None
 
 
-def real_flow(record: Record) -> dict:
+def real_flow(record: Record, placement: dict | None = None) -> dict:
     try:
         from app.automation.runner import run_service
+        from app.core.config import Settings
         from app.core.errors import CaptchaError
         from app.domain.models import Credential
         from app.domain.ports.captcha import CaptchaSolver
@@ -34,6 +35,12 @@ def real_flow(record: Record) -> dict:
 
     cfg = NodeConfig.load()
     solver = _build_solver(cfg)
+
+    # Key tu UI node -> bom vao extension YesCaptcha (extension tu giai in-page).
+    # Mot nguon su that: doi key trong app = doi ca solver lan extension.
+    settings = Settings()
+    if cfg.captcha_key:
+        settings.browser.captcha_client_key = cfg.captcha_key
     if solver is None:
         class _NullSolver(CaptchaSolver):
             name = "none"
@@ -49,9 +56,14 @@ def real_flow(record: Record) -> dict:
 
         solver = _NullSolver()
 
+    # placement (vi tri + kich thuoc cua so) tu bo chia o luoi cua agent -> spawn
+    # khong de nhau, cua so = dien thoai thu nho.
+    options = dict(placement or {})
+
     cred = Credential(username=record.username, password=record.password)
     result = run_service(
-        "roblox.login", cred, job_id=record.id, headless=False, solver=solver
+        "roblox.login", cred, job_id=record.id, headless=False, solver=solver,
+        settings=settings, options=options,
     )
 
     session = (result.data or {}).get("session") or {}

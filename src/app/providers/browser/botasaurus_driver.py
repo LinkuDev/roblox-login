@@ -7,6 +7,10 @@ adapter khac va dang ky vao `browser_registry`, flow khong phai sua dong nao.
 from __future__ import annotations
 
 import json
+import shutil
+import stat
+import sys
+import tempfile
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
@@ -17,6 +21,96 @@ from app.core.logging import get_logger
 from app.domain.models import Proxy
 from app.domain.ports import BrowserProvider, BrowserSession
 from app.providers.browser.base import browser_registry
+
+_ext_log = get_logger("browser.ext")
+
+
+def _ensure_executable(chrome_path: Path) -> None:
+    """Cap lai quyen chay cho Chrome for Testing (PyInstaller datas mat bit +x).
+
+    Chi can khi dong goi; dev thi vo hai. Bo qua tren Windows.
+    """
+    if sys.platform.startswith("win"):
+        return
+    cdir = chrome_path.parent
+    for t in (chrome_path, cdir / "chrome_sandbox", cdir / "chrome_crashpad_handler"):
+        with suppress(OSError):
+            if t.exists():
+                t.chmod(t.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+class _LoadableExtension:
+    """Shim cho botasaurus: no goi `.load(with_command_line_option=False)` va mong
+    nhan lai duong dan thu muc extension unpacked (roi tu them --load-extension=)."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = str(path)
+
+    def load(self, with_command_line_option: bool = False) -> str:  # noqa: FBT001,FBT002
+        return self._path
+
+
+def _build_config_overrides_js(overrides: dict[str, Any]) -> str:
+    """Sinh JS deep-merge overrides vao bien `config` cua extension.
+
+    Cap 1 la dict long (vd funcaptchaConfig) -> Object.assign vao object con; con lai
+    gan thang. Gia tri qua json.dumps -> literal JS hop le (true/false/so/chuoi).
+    """
+    lines: list[str] = []
+    for key, val in overrides.items():
+        if isinstance(val, dict):
+            lines.append(
+                f"config[{json.dumps(key)}]=Object.assign(config[{json.dumps(key)}]||{{}},"
+                f"{json.dumps(val)});"
+            )
+        else:
+            lines.append(f"config[{json.dumps(key)}]={json.dumps(val)};")
+    return "\n".join(lines)
+
+
+def _prepare_captcha_extension(
+    template: Path | None,
+    client_key: str | None,
+    overrides: dict[str, Any] | None = None,
+) -> Path | None:
+    """Copy extension TEMPLATE ra thu muc tam va bom config (clientKey + overrides).
+
+    Tra ve thu muc tam da san sang (caller phai xoa khi xong), hoac None neu khong
+    co template. Dung ban copy de KHONG dung vao template da commit; profile moi moi
+    lan chay -> config.js seed lai chrome.storage.local -> config luon khop app.
+    """
+    if not template:
+        return None
+    template = Path(template)
+    if not template.exists():
+        _ext_log.warning("captcha_extension_missing", path=str(template))
+        return None
+
+    runtime = Path(tempfile.mkdtemp(prefix="rlx-yescaptcha-"))
+    dest = runtime / "ext"
+    shutil.copytree(template, dest)
+
+    merged: dict[str, Any] = dict(overrides or {})
+    if client_key:
+        merged["clientKey"] = client_key
+
+    if merged:
+        cfg = dest / "config.js"
+        if not cfg.exists():
+            _ext_log.warning("captcha_config_missing", path=str(cfg))
+            return dest
+        text = cfg.read_text(encoding="utf-8")
+        inject = _build_config_overrides_js(merged) + "\n"
+        # Chen truoc block seed storage (comment "khong sua" cua extension), fallback
+        # chen truoc loi goi chrome.storage.local.get de override an truoc khi luu.
+        for anchor in ("// 以下代码请勿修改", "chrome.storage.local.get(['config']"):
+            if anchor in text:
+                text = text.replace(anchor, inject + anchor, 1)
+                cfg.write_text(text, encoding="utf-8")
+                break
+        else:
+            _ext_log.warning("captcha_config_anchor_not_found")
+    return dest
 
 
 class BotasaurusSession(BrowserSession):
@@ -136,6 +230,15 @@ class BotasaurusSession(BrowserSession):
         cookies = getattr(self._d, "get_cookies", lambda: [])() or []
         return {c["name"]: c["value"] for c in cookies if "name" in c}
 
+    def clear_cookies(self) -> None:
+        """Xoa cookie (+ local storage) de phien sau khong dinh account nay."""
+        for attr in ("delete_cookies_and_local_storage", "delete_cookies"):
+            fn = getattr(self._d, attr, None)
+            if callable(fn):
+                with suppress(Exception):
+                    fn()
+                return
+
     def user_agent(self) -> str:
         ua = getattr(self._d, "user_agent", None)
         if isinstance(ua, str) and ua:
@@ -201,6 +304,8 @@ class BotasaurusProvider(BrowserProvider):
         headless: bool | None = None,
         user_agent: str | None = None,
         profile: str | None = None,
+        window_position: tuple[int, int] | None = None,
+        window_size: tuple[int, int] | None = None,
         **kwargs: Any,
     ):
         try:
@@ -210,10 +315,12 @@ class BotasaurusProvider(BrowserProvider):
                 "chua cai botasaurus. Chay: pip install botasaurus botasaurus-driver"
             ) from exc
 
+        want_headless = self.settings.headless if headless is None else headless
         opts: dict[str, Any] = {
-            "headless": self.settings.headless if headless is None else headless,
-            # Botasaurus muon (w, h); settings luu chuoi "w,h" nen dung .window
-            "window_size": self.settings.window,
+            "headless": want_headless,
+            # Botasaurus muon (w, h); settings luu chuoi "w,h" nen dung .window.
+            # window_size override (vd tiling phone thu nho) -> uu tien.
+            "window_size": window_size or self.settings.window,
         }
         if proxy:
             opts["proxy"] = proxy.url
@@ -221,6 +328,29 @@ class BotasaurusProvider(BrowserProvider):
             opts["user_agent"] = ua
         if profile:
             opts["profile"] = profile
+        # Vi tri cua so tren man hinh (tiling: xep khong de nhau) qua chrome arg.
+        if window_position is not None:
+            x, y = window_position
+            opts.setdefault("arguments", []).append(f"--window-position={x},{y}")
+
+        # Nhan = Chrome for Testing (khong dung Chrome goc) neu co san.
+        chrome_path = self.settings.chrome_executable_path
+        if chrome_path and Path(chrome_path).exists():
+            if getattr(sys, "frozen", False):
+                _ensure_executable(Path(chrome_path))
+            opts["chrome_executable_path"] = str(chrome_path)
+
+        # Extension YesCaptcha: copy template -> temp + bom clientKey tu config
+        # -> tu giai captcha in-page (khong dung API). Extension chi chay headful.
+        ext_runtime = _prepare_captcha_extension(
+            self.settings.captcha_extension_dir,
+            self.settings.captcha_client_key,
+            self.settings.captcha_config_overrides,
+        )
+        if ext_runtime is not None:
+            opts["extensions"] = [_LoadableExtension(ext_runtime)]
+            opts["headless"] = False  # extension khong hoat dong o headless cu
+
         opts.update(kwargs)
         # cho phep override window_size bang chuoi "w,h" -> chuan hoa ve (w, h)
         if isinstance(opts.get("window_size"), str):
@@ -233,3 +363,6 @@ class BotasaurusProvider(BrowserProvider):
             yield session
         finally:
             session.close()
+            if ext_runtime is not None:
+                # ext_runtime = <tmp>/ext -> xoa ca thu muc tam goc
+                shutil.rmtree(ext_runtime.parent, ignore_errors=True)

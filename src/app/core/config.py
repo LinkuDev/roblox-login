@@ -2,13 +2,49 @@
 
 from __future__ import annotations
 
+import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
+
+
+def bundle_dir() -> Path:
+    """Thu muc goc tai nguyen di kem.
+
+    - Dong goi PyInstaller: sys._MEIPASS (onefile) hoac thu muc chua exe (onedir).
+    - Dev: repo root.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", None) or Path(sys.executable).resolve().parent)
+    return ROOT_DIR
+
+
+def _browser_dir() -> Path:
+    # bundle: <base>/browser ; dev: <root>/data/browser
+    if getattr(sys, "frozen", False):
+        return bundle_dir() / "browser"
+    return ROOT_DIR / "data" / "browser"
+
+
+def default_chrome_path() -> Path:
+    """Duong dan binary Chrome for Testing di kem (da nen tang)."""
+    base = _browser_dir()
+    binname = "chrome.exe" if sys.platform.startswith("win") else "chrome"
+    for sub in ("chrome", "chrome-linux64", "chrome-win64", "chrome-mac-x64", "chrome-mac-arm64"):
+        p = base / sub / binname
+        if p.exists():
+            return p
+    return base / "chrome-linux64" / binname  # dev default (co the chua ton tai)
+
+
+def default_extension_dir() -> Path:
+    """Thu muc template extension YesCaptcha (unpacked) di kem."""
+    return _browser_dir() / "yescaptcha-ext"
 
 
 class AppSettings(BaseSettings):
@@ -51,10 +87,36 @@ class BrowserSettings(BaseSettings):
 
     provider: str = "botasaurus"
     headless: bool = True
-    window_size: str = "1280,800"
+    # Kich thuoc = 1 dien thoai that (Pixel 7), khong dung width desktop.
+    window_size: str = "412,915"
     timeout: int = 45
     profile_dir: Path = ROOT_DIR / "data" / "profiles"
-    user_agent: str | None = None
+    # Mobile UA khop Chrome engine (CfT) de Roblox tra layout mobile ma khong lech.
+    user_agent: str | None = (
+        "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36"
+    )
+    # Nhan = Chrome for Testing (khong dung Chrome goc). None -> chrome he thong.
+    # default_factory -> tu tim trong bundle (khi dong goi) hoac data/browser (dev).
+    chrome_executable_path: Path | None = Field(default_factory=default_chrome_path)
+    # Extension YesCaptcha (unpacked, TEMPLATE) tu giai captcha in-page thay cho API.
+    captcha_extension_dir: Path | None = Field(default_factory=default_extension_dir)
+    # clientKey bom vao config.js cua ban copy luc launch (nguon: config app/node UI).
+    # None -> giu nguyen key co san trong template.
+    captcha_client_key: str | None = None
+    # Override cac field trong config.js cua extension (merge sau, ho tro long nhau).
+    # Vd: FunCaptcha giai fail -> nhan "Try again". Node/app co the ghi de field nay.
+    captcha_config_overrides: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "autorun": True,
+            "funcaptchaConfig": {
+                "isOpen": True,
+                "isAutoClickPrePage": True,
+                "actionAfterRecFail": "tryAgain",
+                "actionAfterOneRecFail": "restart",
+            },
+        }
+    )
 
     @property
     def window(self) -> tuple[int, int]:

@@ -97,5 +97,11 @@ class AccountLocked(AutomationError):
     code = "account_locked"
 
 
+class NeedMobileApp(AutomationError):
+    """Man /not-approved doi xac thuc bang app mobile (quet QR) - automation bo tay."""
+
+    code = "need_mobile_app"
+
+
 class RateLimited(AutomationError):
     code = "rate_limited"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from jose import JWTError, jwt
@@ -27,7 +27,7 @@ def verify_password(raw: str, hashed: str) -> bool:
 
 def create_access_token(subject: str, extra: dict | None = None) -> str:
     s = get_settings().app
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": subject,
         "iat": now,

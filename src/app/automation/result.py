@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.enums import StepOutcome
@@ -55,12 +55,12 @@ class RunResult:
     steps: list[StepResult] = field(default_factory=list)
     artifacts: list[str] = field(default_factory=list)
     cost: dict[str, float] = field(default_factory=dict)   # vd {"captcha": 0.0029}
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     finished_at: datetime | None = None
 
     @property
     def duration(self) -> float:
-        end = self.finished_at or datetime.now(UTC)
+        end = self.finished_at or datetime.now(timezone.utc)
         return (end - self.started_at).total_seconds()
 
     def to_dict(self) -> dict:

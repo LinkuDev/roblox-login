@@ -96,9 +96,9 @@ class Flow:
         return last or StepResult.failed(step.name, "khong chay duoc", "unknown")
 
     def _finalize(self, ctx: ExecutionContext, result: RunResult) -> None:
-        from datetime import UTC, datetime
+        from datetime import datetime, timezone
 
-        result.finished_at = datetime.now(UTC)
+        result.finished_at = datetime.now(timezone.utc)
         result.artifacts = list(ctx.artifacts)
         result.cost = dict(ctx.cost)
 

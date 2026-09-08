@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.core.enums import CaptchaType
@@ -110,7 +110,7 @@ class SessionArtifact:
     tokens: dict[str, str] = field(default_factory=dict)
     user_agent: str | None = None
     profile: dict[str, Any] = field(default_factory=dict)
-    captured_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    captured_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {

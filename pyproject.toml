@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "roblox-login"
 version = "0.1.0"
 description = "Automation-as-a-Service platform: account services, captcha solving, points billing"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",

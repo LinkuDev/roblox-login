@@ -31,10 +31,15 @@ class AuthService:
     def register(self, email: str, password: str) -> User:
         if self.users.by_email(email):
             raise BusinessError("email da ton tai")
-        user = self.users.add(User(email=email, password_hash=hash_password(password)))
-        self.billing.ensure_wallet(user.id)
 
         from app.core.config import get_settings
+        from app.core.enums import UserRole
+
+        role = UserRole.ADMIN if get_settings().app.is_admin_email(email) else UserRole.USER
+        user = self.users.add(
+            User(email=email, password_hash=hash_password(password), role=role)
+        )
+        self.billing.ensure_wallet(user.id)
 
         bonus = get_settings().billing.point_signup_bonus
         if bonus > 0:

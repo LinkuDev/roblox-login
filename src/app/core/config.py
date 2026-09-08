@@ -56,6 +56,19 @@ class AppSettings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = False
     access_token_ttl_minutes: int = 60 * 24
+    # Email duoc cap quyen ADMIN tu dong luc register (ngan cach dau phay). Admin ->
+    # topup diem + tao API key cho node claim pool. Vd: APP_ADMIN_EMAILS=op@x.co
+    admin_emails: str = ""
+    # Origin FE (Next.js) duoc phep goi API qua CORS (ngan cach dau phay). "*" = tat ca.
+    # Vd: APP_CORS_ORIGINS=http://localhost:3000,https://app.mysaas.com
+    cors_origins: str = "*"
+
+    def is_admin_email(self, email: str) -> bool:
+        allow = {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+        return email.strip().lower() in allow
+
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()] or ["*"]
 
     @property
     def is_prod(self) -> bool:
@@ -155,6 +168,38 @@ class BillingSettings(BaseSettings):
     point_signup_bonus: int = 0
 
 
+class CryptoSettings(BaseSettings):
+    """Nap diem tu dong qua crypto. Doi cong thanh toan = doi 1 dong `provider`.
+
+    - provider: `manual` (dev/mac dinh - admin tao dia chi vi + confirm tay hoac qua
+      webhook noi bo) hoac `nowpayments` (goi HTTP that, xac thuc IPN bang HMAC).
+    - points_per_usd: 1 USD (stablecoin) = bao nhieu diem. total_usd = points/rate.
+    - min_points: nạp toi thieu.
+    - deposit_ttl_minutes: het han thi lenh nap chuyen EXPIRED.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="CRYPTO_", env_file=".env", extra="ignore")
+
+    provider: str = "manual"
+    enabled: bool = True
+    points_per_usd: int = 1000
+    min_points: int = 1000
+    deposit_ttl_minutes: int = 60
+    # currency (stablecoin/coin) cho phep. FE chon 1 trong list nay.
+    currencies: str = "USDT,USDC,BTC,ETH"
+    # `manual`: dia chi vi nhan tien (hien cho user). Co the map theo currency sau.
+    wallet_address: str = ""
+    # `nowpayments`: khoa API + IPN secret (xac thuc webhook). Trong env, khong hardcode.
+    api_key: str = ""
+    ipn_secret: str = ""
+    api_base: str = "https://api.nowpayments.io/v1"
+    # URL callback provider goi ve (public URL cua SaaS). Vd https://api.mysaas.com
+    callback_base: str = ""
+
+    def currency_list(self) -> list[str]:
+        return [c.strip().upper() for c in self.currencies.split(",") if c.strip()]
+
+
 class Settings(BaseSettings):
     """Root settings - inject cai nay di khap noi thay vi doc env truc tiep."""
 
@@ -168,6 +213,7 @@ class Settings(BaseSettings):
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     queue: QueueSettings = Field(default_factory=QueueSettings)
     billing: BillingSettings = Field(default_factory=BillingSettings)
+    crypto: CryptoSettings = Field(default_factory=CryptoSettings)
 
     root_dir: Path = ROOT_DIR
 

@@ -95,6 +95,18 @@ class OrderService:
             self.queue.enqueue(record.id, {"record_id": record.id})
 
         order.status = OrderStatus.PROCESSING
+
+        from app.core.enums import NotificationLevel
+        from app.modules.notifications import NotificationService
+
+        NotificationService(self.session).notify(
+            user_id,
+            title="Da tao don hang",
+            body=f"Don {service_id} x{quantity} - da tru {total} diem, dang xu ly.",
+            level=NotificationLevel.INFO,
+            ref_type="order",
+            ref_id=order.id,
+        )
         return order
 
     def get(self, order_id: str, user_id: str | None = None) -> Order:
@@ -105,3 +117,55 @@ class OrderService:
 
     def list_for_user(self, user_id: str) -> list[Order]:
         return self.orders.by_user(user_id)
+
+    def records(
+        self, order_id: str, user_id: str | None = None, status: str | None = None
+    ) -> list[dict]:
+        """Records cua 1 order (co check chu so huu). Kem cookie/ket qua cho chu don."""
+        from app.db.repositories import RecordRepository
+
+        self.get(order_id, user_id)   # raise neu khong phai don cua user
+        rows = RecordRepository(self.session).by_order(order_id)
+        if status:
+            rows = [r for r in rows if str(r.status) == status]
+        return [self._record_view(r) for r in rows]
+
+    def export(self, order_id: str, user_id: str | None = None) -> str:
+        """Xuat cookie cac record THANH CONG dang text (moi dong 1 cookie).
+
+        Day la "san pham" khach mua: gia tri .ROBLOSECURITY / session tra ve.
+        """
+        import json
+
+        from app.core.enums import JobStatus
+
+        lines: list[str] = []
+        for r in self.records(order_id, user_id, status=str(JobStatus.SUCCESS)):
+            cookie = ""
+            raw = r.get("cookies") or ""
+            if raw:
+                try:
+                    data = json.loads(raw)
+                    if isinstance(data, dict):
+                        cookie = data.get(".ROBLOSECURITY") or data.get("cookie") or raw
+                    else:
+                        cookie = raw
+                except (ValueError, TypeError):
+                    cookie = raw
+            lines.append(f"{r['username']}:{cookie}" if cookie else r["username"])
+        return "\n".join(lines)
+
+    @staticmethod
+    def _record_view(r) -> dict:
+        return {
+            "id": r.id,
+            "order_id": r.order_id,
+            "username": r.username,
+            "status": r.status,
+            "attempt": r.attempt,
+            "error_code": r.error_code,
+            "reason": r.reason,
+            "cookies": r.cookies,
+            "duration": r.duration,
+            "created_at": r.created_at.isoformat(),
+        }

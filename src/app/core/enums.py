@@ -42,6 +42,7 @@ class OrderStatus(StrEnum):
 
 class PointTxType(StrEnum):
     TOPUP = "topup"            # admin cong tay / sau nay la cong thanh toan
+    DEPOSIT = "deposit"        # nap qua crypto (tu dong)
     SPEND = "spend"
     REFUND = "refund"
     BONUS = "bonus"
@@ -51,6 +52,34 @@ class PointTxType(StrEnum):
 class UserRole(StrEnum):
     USER = "user"
     ADMIN = "admin"
+
+
+class NotificationLevel(StrEnum):
+    """Muc do thong bao -> FE to mau/icon theo cai nay."""
+
+    INFO = "info"
+    SUCCESS = "success"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class CmsKind(StrEnum):
+    """Loai noi dung CMS admin bat/tat khong can deploy."""
+
+    BANNER = "banner"          # thanh ngang tren dau trang
+    MODAL = "modal"            # popup giua man
+    ANNOUNCEMENT = "announcement"
+
+
+class DepositStatus(StrEnum):
+    """Vong doi 1 lenh nap crypto."""
+
+    PENDING = "pending"        # da tao, cho user chuyen tien
+    CONFIRMING = "confirming"  # da thay tx, cho du confirmation
+    CONFIRMED = "confirmed"    # da cong diem (terminal, idempotent)
+    EXPIRED = "expired"        # het han chua tra
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class StepOutcome(StrEnum):

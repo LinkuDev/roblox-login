@@ -27,8 +27,10 @@ def _default_node_name() -> str:
 
 @dataclass
 class NodeConfig:
-    # 1. connect toi pool (phase sau)
+    # 1. connect toi SaaS pool: URL goc SaaS + token (API key) de claim/report.
+    #    Ca hai co gia tri -> node keo record tu SaaS; rong -> LocalPool (dev).
     pool_url: str = ""
+    pool_token: str = ""
     # 2. captcha
     captcha_provider: str = "yescaptcha"
     captcha_key: str = ""

@@ -23,6 +23,7 @@ from robloxnode.store import ResultStore
 
 class ConfigBody(BaseModel):
     pool_url: str = ""
+    pool_token: str = ""
     captcha_provider: str = "yescaptcha"
     captcha_key: str = ""
     ram_overflow_percent: int = 85
@@ -101,7 +102,15 @@ class _ProxyRotator:
 def build_app() -> FastAPI:
     app = FastAPI(title="Roblox Node")
 
-    pool = LocalPool()   # RONG: chua co pool that. Nap record test qua /api/pool/add
+    # Pool: co pool_url + pool_token -> keo record tu SaaS (RemotePool); rong ->
+    # LocalPool (dev, nap tay qua /api/pool/add). Doi che do can restart app.
+    _cfg0 = NodeConfig.load()
+    if _cfg0.pool_url and _cfg0.pool_token:
+        from robloxnode.remotepool import RemotePool
+
+        pool = RemotePool(_cfg0.pool_url, _cfg0.pool_token, node_id=_cfg0.node_name)
+    else:
+        pool = LocalPool()   # RONG: nap record test qua /api/pool/add
     # mac dinh chay flow THAT (mo Chrome). Dat RLX_NODE_FLOW=stub de gia lap khong browser.
     base_flow = stub_flow if os.environ.get("RLX_NODE_FLOW") == "stub" else real_flow
 
@@ -156,6 +165,7 @@ def build_app() -> FastAPI:
     def save_config(body: ConfigBody) -> JSONResponse:
         cfg = NodeConfig.load()
         cfg.pool_url = body.pool_url
+        cfg.pool_token = body.pool_token
         cfg.captcha_provider = body.captcha_provider
         cfg.captcha_key = body.captcha_key
         cfg.ram_overflow_percent = body.ram_overflow_percent
@@ -183,7 +193,14 @@ def build_app() -> FastAPI:
 
     @app.post("/api/pool/add")
     def pool_add(body: PoolAddBody) -> JSONResponse:
-        """Nap danh sach account (user:pass moi dong) vao pool de chay."""
+        """Nap danh sach account (user:pass moi dong) vao pool de chay.
+
+        Chi dung o che do LocalPool (dev). RemotePool: account nap tu SaaS (orders)."""
+        if not hasattr(pool, "add_lines"):
+            return JSONResponse(
+                {"error": "dang o che do RemotePool - nap account tu SaaS, khong nap o node"},
+                status_code=400,
+            )
         added = pool.add_lines(body.lines)
         pending = pool.pending_count()
         # Nhat ky tu xa: moi lan them account vao hang doi -> so luong them.
@@ -317,8 +334,12 @@ _PAGE = """<!doctype html>
     <summary>Cấu hình</summary>
     <div class="cfgbody">
       <div class="row">
-        <label>Pool URL (dùng phase sau)</label>
-        <input id="pool_url" placeholder="wss://saas.example.com/ws/node" autocomplete="off">
+        <label>SaaS Pool URL — để trống = chạy pool local (dev)</label>
+        <input id="pool_url" placeholder="http://saas-ip:8000" autocomplete="off">
+      </div>
+      <div class="row">
+        <label>Pool token (API key tạo từ web SaaS) — cần kèm Pool URL</label>
+        <input id="pool_token" type="password" placeholder="rlx_..." autocomplete="off">
       </div>
       <div class="row">
         <label>Captcha — nhà cung cấp</label>
@@ -400,6 +421,7 @@ async function loadConfig(){
   const sel=$('captcha_provider'); sel.innerHTML='';
   providers.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);});
   $('pool_url').value=c.pool_url||'';
+  $('pool_token').value=c.pool_token||'';
   sel.value=c.captcha_provider||providers[0];
   $('captcha_key').value=c.captcha_key||'';
   $('ram_range').value=c.ram_overflow_percent||85;
@@ -417,7 +439,7 @@ $('togglekey').addEventListener('click',()=>{const k=$('captcha_key'),b=$('toggl
   if(k.type==='password'){k.type='text';b.textContent='ẩn';}else{k.type='password';b.textContent='hiện';}});
 
 $('save').addEventListener('click',async()=>{
-  const body={pool_url:$('pool_url').value,captcha_provider:$('captcha_provider').value,
+  const body={pool_url:$('pool_url').value,pool_token:$('pool_token').value,captcha_provider:$('captcha_provider').value,
     captcha_key:$('captcha_key').value,ram_overflow_percent:+$('ram_range').value,
     max_concurrent:+$('max_concurrent').value,win_w:+$('win_w').value,win_h:+$('win_h').value,
     proxies:$('proxies').value,proxy_rotate_every:+$('proxy_rotate_every').value};

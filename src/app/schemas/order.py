@@ -43,6 +43,21 @@ class OrderResponse(BaseModel):
         from_attributes = True
 
 
+class RecordDetail(BaseModel):
+    """1 record trong don (kem ket qua/cookie cho chu don)."""
+
+    id: str
+    order_id: str
+    username: str
+    status: str
+    attempt: int
+    error_code: str
+    reason: str
+    cookies: str
+    duration: float
+    created_at: str
+
+
 class ServiceInfo(BaseModel):
     id: str
     name: str

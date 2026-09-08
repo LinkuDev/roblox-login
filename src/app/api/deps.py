@@ -37,6 +37,23 @@ def current_user(
     raise HTTPException(status_code=401, detail="thieu thong tin xac thuc")
 
 
+def optional_user(
+    authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None),
+    session: Session = Depends(db_session),
+) -> User | None:
+    """Nhu current_user nhung KHONG bat buoc: chua dang nhap -> None (khong raise).
+
+    Dung cho endpoint cong khai co the ca nhan hoa neu co token (vd /cms/active
+    loc bo cai user da tat)."""
+    if not authorization and not x_api_key:
+        return None
+    try:
+        return current_user(authorization, x_api_key, session)
+    except HTTPException:
+        return None
+
+
 def require_admin(user: User = Depends(current_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="can quyen admin")

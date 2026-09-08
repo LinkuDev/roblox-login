@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_user, db_session
+from app.api.deps import db_session, require_admin
 from app.db.models import User
 from app.modules.auth import AuthService
 from app.schemas.auth import (
@@ -32,8 +32,8 @@ def login(body: LoginRequest, session: Session = Depends(db_session)):
 @router.post("/api-keys", response_model=ApiKeyResponse)
 def create_api_key(
     label: str = "",
-    user: User = Depends(current_user),
+    admin: User = Depends(require_admin),   # API key = node claim pool (noi bo) -> chi ADMIN
     session: Session = Depends(db_session),
 ):
-    raw = AuthService(session).issue_api_key(user.id, label)
+    raw = AuthService(session).issue_api_key(admin.id, label)
     return ApiKeyResponse(api_key=raw, label=label)

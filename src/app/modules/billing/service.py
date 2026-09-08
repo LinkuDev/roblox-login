@@ -32,11 +32,19 @@ class BillingService:
             raise NotFoundError("chua co vi")
         return wallet.balance
 
-    def topup(self, user_id: str, amount: int, note: str = "", tx_type=PointTxType.TOPUP) -> int:
+    def topup(
+        self,
+        user_id: str,
+        amount: int,
+        note: str = "",
+        tx_type=PointTxType.TOPUP,
+        ref_type: str = "",
+        ref_id: str = "",
+    ) -> int:
         if amount <= 0:
             raise ValueError("so diem nap phai > 0")
         wallet = self.ensure_wallet(user_id)
-        return self._apply(wallet, tx_type, amount, note=note)
+        return self._apply(wallet, tx_type, amount, ref_type, ref_id, note)
 
     def charge(self, user_id: str, amount: int, ref_type: str = "", ref_id: str = "", note: str = "") -> int:
         """Tru diem. Raise InsufficientPoints neu khong du."""

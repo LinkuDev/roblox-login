@@ -23,7 +23,7 @@ def _build_solver(cfg: NodeConfig):
         return None
 
 
-def real_flow(record: Record) -> dict:
+def real_flow(record: Record, placement: dict | None = None) -> dict:
     try:
         from app.automation.runner import run_service
         from app.core.config import Settings
@@ -56,10 +56,14 @@ def real_flow(record: Record) -> dict:
 
         solver = _NullSolver()
 
+    # placement (vi tri + kich thuoc cua so) tu bo chia o luoi cua agent -> spawn
+    # khong de nhau, cua so = dien thoai thu nho.
+    options = dict(placement or {})
+
     cred = Credential(username=record.username, password=record.password)
     result = run_service(
         "roblox.login", cred, job_id=record.id, headless=False, solver=solver,
-        settings=settings,
+        settings=settings, options=options,
     )
 
     session = (result.data or {}).get("session") or {}

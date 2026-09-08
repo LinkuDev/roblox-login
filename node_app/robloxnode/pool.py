@@ -33,6 +33,8 @@ class LocalPool:
         self._q: deque[Record] = deque()
         self._lock = threading.Lock()
         self.reported: list[tuple[str, dict]] = []
+        # trang thai vong doi tung record: pending -> running -> success|failed
+        self._status: dict[str, str] = {}
 
     def seed_demo(self, n: int = 500) -> None:
         with self._lock:
@@ -47,9 +49,14 @@ class LocalPool:
                 line = raw.strip()
                 if not line or line.startswith("#") or ":" not in line:
                     continue
-                u, _, p = line.partition(":")
-                if u.strip() and p.strip():
-                    self._q.append(Record(f"line-{idx}", u.strip(), p.strip()))
+                # format "user:pass" hoac "user:pass:cookie" (cookie chua ':' ->
+                # chi tach 2 ':' dau, bo phan cookie vi login chi can user/pass).
+                parts = line.split(":", 2)
+                u, p = parts[0].strip(), parts[1].strip()
+                if u and p:
+                    rid = f"line-{idx}"
+                    self._q.append(Record(rid, u, p))
+                    self._status[rid] = "pending"
                     added += 1
         return added
 
@@ -59,11 +66,25 @@ class LocalPool:
 
     def claim(self) -> Record | None:
         with self._lock:
-            return self._q.popleft() if self._q else None
+            if not self._q:
+                return None
+            rec = self._q.popleft()
+            self._status[rec.id] = "running"   # doi trang thai khi spawn
+            return rec
 
     def report(self, record_id: str, result: dict) -> None:
         with self._lock:
             self.reported.append((record_id, result))
+            # doi trang thai DB khi flow xong: success (da giai + dang nhap) / failed
+            self._status[record_id] = "success" if result.get("success") else "failed"
+
+    def statuses(self) -> dict[str, int]:
+        """Dem record theo trang thai (cho UI/kiem tra)."""
+        out: dict[str, int] = {}
+        with self._lock:
+            for s in self._status.values():
+                out[s] = out.get(s, 0) + 1
+        return out
 
     def pending_count(self) -> int:
         with self._lock:

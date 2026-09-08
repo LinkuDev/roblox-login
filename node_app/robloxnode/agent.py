@@ -1,12 +1,15 @@
 """NodeAgent: vong lap always-on.
 
-start() -> lang nghe pool, claim khi con headroom (RAM < diem tran & slot < tran cung),
-moi record chay 1 flow trong 1 slot (thread) song song, xong thi report.
-stop()  -> ngung lang nghe (khong claim moi), slot dang chay xong thi thoi (drain).
+start() -> lang nghe pool, claim khi con headroom (RAM < diem tran & slot < max),
+moi record chay 1 flow trong 1 LUONG rieng (thread) song song, spawn browser vao 1
+o luoi trong (khong de nhau), xong thi report + persist DB + tra o cho record sau.
+stop()  -> ngung claim moi; slot dang chay xong thi thoi (drain).
 
-Agent doc lap voi:
+Doc lap voi:
   - pool     : PoolClient (LocalPool hom nay, WsPool sau)
-  - run_flow : callable(Record) -> dict (stub hom nay, run_service that sau)
+  - run_flow : callable(Record, placement|None) -> dict
+  - store    : ResultStore | None (ghi ket qua ca success lan failed)
+  - layout   : SlotAllocator | None (chia o cua so; None -> khong dat vi tri)
 """
 
 from __future__ import annotations
@@ -16,31 +19,38 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 
 import psutil
 
+from robloxnode.layout import SlotAllocator
 from robloxnode.pool import PoolClient, Record
+from robloxnode.store import ResultStore
 
 
-def _default_hard_cap() -> int:
-    return max(2, min(8, (os.cpu_count() or 2)))
+def _default_max_concurrent() -> int:
+    return max(2, os.cpu_count() or 4)
 
 
 class NodeAgent:
     def __init__(
         self,
         pool: PoolClient,
-        run_flow: Callable[[Record], dict],
+        run_flow: Callable[[Record, dict | None], dict],
         get_overflow_percent: Callable[[], int],
         *,
-        hard_cap: int | None = None,
+        get_max_concurrent: Callable[[], int] | None = None,
+        get_layout: Callable[[], SlotAllocator | None] | None = None,
+        store: ResultStore | None = None,
         poll_interval: float = 1.0,
         settle_delay: float = 1.2,
     ) -> None:
         self.pool = pool
         self.run_flow = run_flow
         self.get_overflow_percent = get_overflow_percent
-        self.hard_cap = hard_cap or _default_hard_cap()
+        self.get_max_concurrent = get_max_concurrent or _default_max_concurrent
+        self.get_layout = get_layout
+        self.store = store
         self.poll = poll_interval
         self.settle = settle_delay
 
@@ -48,7 +58,9 @@ class NodeAgent:
         self._running = False
         self._sup: threading.Thread | None = None
         self._exec: ThreadPoolExecutor | None = None
-        self._active: dict[str, dict] = {}   # record_id -> {username, since}
+        self._layout: SlotAllocator | None = None
+        self.hard_cap = self.get_max_concurrent()
+        self._active: dict[str, dict] = {}   # record_id -> {username, since, slot}
         self._claimed = 0
         self._done = 0
         self._failed = 0
@@ -59,6 +71,8 @@ class NodeAgent:
             if self._running:
                 return
             self._running = True
+            self.hard_cap = max(1, self.get_max_concurrent())
+            self._layout = self.get_layout() if self.get_layout else None
             self._exec = ThreadPoolExecutor(max_workers=self.hard_cap)
         self._sup = threading.Thread(target=self._supervise, name="node-supervisor", daemon=True)
         self._sup.start()
@@ -98,27 +112,39 @@ class NodeAgent:
 
     def _start_slot(self, record: Record) -> None:
         with self._lock:
-            self._active[record.id] = {"username": record.username, "since": time.time()}
+            layout = self._layout
+            slot = layout.acquire() if layout else None
+            placement = layout.placement(slot) if (layout and slot is not None) else None
+            self._active[record.id] = {
+                "username": record.username, "since": time.time(), "slot": slot,
+            }
             self._claimed += 1
             ex = self._exec
         if ex is not None:
-            ex.submit(self._run_one, record)
+            ex.submit(self._run_one, record, slot, placement)
 
-    def _run_one(self, record: Record) -> None:
+    def _run_one(self, record: Record, slot: int | None, placement: dict | None) -> None:
+        result: dict = {"success": False, "error": "unknown", "reason": ""}
         try:
-            result = self.run_flow(record)
-            self.pool.report(record.id, result)
+            result = self.run_flow(record, placement)
+        except Exception as exc:  # 1 slot loi khong duoc lam chet agent
+            result = {"success": False, "error": "exception", "reason": repr(exc)}
+        finally:
+            # doi trang thai DB (pool) + persist ket qua: CA success lan failed,
+            # ke ca khi exception. Loi ghi khong duoc lam chet slot.
+            with suppress(Exception):
+                self.pool.report(record.id, result)
+            if self.store is not None:
+                with suppress(Exception):
+                    self.store.save(record, result)
             with self._lock:
                 if result.get("success"):
                     self._done += 1
                 else:
                     self._failed += 1
-        except Exception:  # 1 slot loi khong duoc lam chet agent
-            with self._lock:
-                self._failed += 1
-        finally:
-            with self._lock:
                 self._active.pop(record.id, None)
+                if self._layout and slot is not None:
+                    self._layout.release(slot)   # tra o cho record sau lap vao
 
     # --- trang thai cho UI --------------------------------------------------
     def status(self) -> dict:
@@ -127,11 +153,16 @@ class NodeAgent:
         now = time.time()
         with self._lock:
             slots = [
-                {"username": v["username"], "elapsed": round(now - v["since"], 1)}
+                {
+                    "username": v["username"],
+                    "elapsed": round(now - v["since"], 1),
+                    "slot": v["slot"],
+                }
                 for v in self._active.values()
             ]
             claimed, done, failed = self._claimed, self._done, self._failed
             active = len(self._active)
+        db_status = self.pool.statuses() if hasattr(self.pool, "statuses") else {}
         return {
             "listening": self._running,
             "active_slots": active,
@@ -139,6 +170,7 @@ class NodeAgent:
             "claimed": claimed,
             "done": done,
             "failed": failed,
+            "db_status": db_status,
             "pending": self.pool.pending_count(),
             "ram_percent": round(ram, 1),
             "overflow_at": overflow,

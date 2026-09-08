@@ -14,8 +14,10 @@ from pydantic import BaseModel
 from robloxnode.agent import NodeAgent
 from robloxnode.config import CAPTCHA_PROVIDERS, NodeConfig, default_config_path
 from robloxnode.flows import stub_flow
+from robloxnode.layout import SlotAllocator, detect_screen
 from robloxnode.pool import LocalPool
 from robloxnode.realflow import real_flow
+from robloxnode.store import ResultStore
 
 
 class ConfigBody(BaseModel):
@@ -23,6 +25,9 @@ class ConfigBody(BaseModel):
     captcha_provider: str = "yescaptcha"
     captcha_key: str = ""
     ram_overflow_percent: int = 85
+    max_concurrent: int = 10
+    win_w: int = 340
+    win_h: int = 620
 
 
 class PoolAddBody(BaseModel):
@@ -35,10 +40,22 @@ def build_app() -> FastAPI:
     pool = LocalPool()   # RONG: chua co pool that. Nap record test qua /api/pool/add
     # mac dinh chay flow THAT (mo Chrome). Dat RLX_NODE_FLOW=stub de gia lap khong browser.
     run_flow = stub_flow if os.environ.get("RLX_NODE_FLOW") == "stub" else real_flow
+
+    def _make_layout() -> SlotAllocator:
+        c = NodeConfig.load()
+        sw, sh = c.screen_w, c.screen_h
+        if sw <= 0 or sh <= 0:
+            sw, sh = detect_screen()
+        return SlotAllocator((sw, sh), (c.win_w, c.win_h), gap=c.win_gap)
+
+    store = ResultStore()   # DB local: dung chung cho agent (ghi) va /api/results (doc)
     agent = NodeAgent(
         pool,
         run_flow,
         get_overflow_percent=lambda: NodeConfig.load().ram_overflow_percent,
+        get_max_concurrent=lambda: NodeConfig.load().max_concurrent,
+        get_layout=_make_layout,
+        store=store,
     )
 
     @app.get("/", response_class=HTMLResponse)
@@ -60,6 +77,9 @@ def build_app() -> FastAPI:
         cfg.captcha_provider = body.captcha_provider
         cfg.captcha_key = body.captcha_key
         cfg.ram_overflow_percent = body.ram_overflow_percent
+        cfg.max_concurrent = body.max_concurrent
+        cfg.win_w = body.win_w
+        cfg.win_h = body.win_h
         path = cfg.normalized().save()
         return JSONResponse({"ok": True, "path": str(path)})
 
@@ -79,9 +99,19 @@ def build_app() -> FastAPI:
 
     @app.post("/api/pool/add")
     def pool_add(body: PoolAddBody) -> JSONResponse:
-        """Nap record test vao LocalPool (chua co pool that)."""
+        """Nap danh sach account (user:pass moi dong) vao pool de chay."""
         added = pool.add_lines(body.lines)
         return JSONResponse({"added": added, "pending": pool.pending_count()})
+
+    @app.get("/api/results")
+    def api_results() -> JSONResponse:
+        """Log ket qua: cai nao xong/that bai + ly do (cho stakeholder)."""
+        return JSONResponse(store.load(limit=500))
+
+    @app.post("/api/results/clear")
+    def api_results_clear() -> JSONResponse:
+        store.clear()
+        return JSONResponse({"ok": True})
 
     return app
 
@@ -156,6 +186,19 @@ _PAGE = """<!doctype html>
     border-radius:8px;padding:9px;font-weight:600;font-size:13px;cursor:pointer;margin-top:2px}
   .save:hover{background:var(--node-dim)}
   .savedmsg{font-size:11px;color:var(--node);text-align:center;height:14px;margin-top:5px}
+  .resbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px}
+  .rb{padding:2px 8px;border-radius:20px;background:var(--card);border:1px solid var(--line)}
+  .rb.ok b{color:#3fb950} .rb.fail b{color:#f85149} .rb.tot b{color:var(--ink)}
+  .resbar button{background:var(--card);color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer}
+  .resbar button:hover{border-color:var(--node)}
+  .restable{max-height:260px;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px}
+  .rrow{display:flex;gap:7px;align-items:baseline;font-size:12px;padding:4px 7px;border-radius:7px}
+  .rrow:nth-child(odd){background:rgba(255,255,255,.02)}
+  .rs{width:12px;text-align:center;flex:none} .rs.ok{color:#3fb950} .rs.fail{color:#f85149}
+  .ru{color:var(--ink);min-width:120px;word-break:break-all}
+  .ri{color:var(--muted);flex:1;word-break:break-word}
+  .restable .empty{color:var(--muted);text-align:center;padding:18px 0;font-size:12px}
 </style></head>
 <body><div class="app">
   <header>
@@ -204,20 +247,47 @@ _PAGE = """<!doctype html>
           <span class="val"><span id="ram_val">85</span>%</span>
         </div>
       </div>
+      <div class="row">
+        <label>Số luồng chạy song song tối đa (kèm RAM gate)</label>
+        <input id="max_concurrent" type="number" min="1" max="200" step="1">
+      </div>
+      <div class="row">
+        <label>Cửa sổ điện thoại (rộng × cao px) — xếp lưới không đè</label>
+        <div class="steprow">
+          <input id="win_w" type="number" min="200" max="1200" step="10" style="width:80px">
+          <span class="val">×</span>
+          <input id="win_h" type="number" min="300" max="1600" step="10" style="width:80px">
+        </div>
+      </div>
       <button class="save" id="save">Lưu cấu hình</button>
       <div class="savedmsg" id="saved"></div>
     </div>
   </details>
 
-  <details class="cfg" id="testcfg">
-    <summary>Nạp record test (chưa có pool)</summary>
+  <details class="cfg" id="inputcfg" open>
+    <summary>Danh sách account</summary>
     <div class="cfgbody">
       <div class="row">
-        <label>user:pass mỗi dòng — chỉ để thử loop</label>
-        <textarea id="test_lines" rows="3" placeholder="user1:pass1&#10;user2:pass2"></textarea>
+        <label>Mỗi dòng 1 account: <b>user:pass</b> hoặc <b>user:pass:cookie</b></label>
+        <textarea id="test_lines" rows="4" placeholder="user1:pass1&#10;user2:pass2:_|WARNING..."></textarea>
       </div>
-      <button class="save" id="addpool">Nạp vào pool</button>
+      <button class="save" id="addpool">Nạp danh sách vào hàng đợi</button>
       <div class="savedmsg" id="added"></div>
+    </div>
+  </details>
+
+  <details class="cfg" id="resultcfg" open>
+    <summary>Kết quả</summary>
+    <div class="cfgbody">
+      <div class="resbar">
+        <span class="rb ok">✓ <b id="r_ok">0</b></span>
+        <span class="rb fail">✗ <b id="r_fail">0</b></span>
+        <span class="rb tot">Σ <b id="r_tot">0</b></span>
+        <span style="flex:1"></span>
+        <button type="button" id="export">Xuất CSV</button>
+        <button type="button" id="clearres">Xoá</button>
+      </div>
+      <div class="restable" id="restable"><div class="empty">chưa có kết quả</div></div>
     </div>
   </details>
 </div>
@@ -235,6 +305,9 @@ async function loadConfig(){
   $('captcha_key').value=c.captcha_key||'';
   $('ram_range').value=c.ram_overflow_percent||85;
   $('ram_val').textContent=c.ram_overflow_percent||85;
+  $('max_concurrent').value=c.max_concurrent||10;
+  $('win_w').value=c.win_w||340;
+  $('win_h').value=c.win_h||620;
   drawThresh();
 }
 function drawThresh(){$('thresh').style.left=(+$('ram_range').value)+'%';}
@@ -244,7 +317,8 @@ $('togglekey').addEventListener('click',()=>{const k=$('captcha_key'),b=$('toggl
 
 $('save').addEventListener('click',async()=>{
   const body={pool_url:$('pool_url').value,captcha_provider:$('captcha_provider').value,
-    captcha_key:$('captcha_key').value,ram_overflow_percent:+$('ram_range').value};
+    captcha_key:$('captcha_key').value,ram_overflow_percent:+$('ram_range').value,
+    max_concurrent:+$('max_concurrent').value,win_w:+$('win_w').value,win_h:+$('win_h').value};
   const j=await(await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
   $('saved').textContent=j.ok?'✓ Đã lưu':'Lỗi'; setTimeout(()=>$('saved').textContent='',1800);
 });
@@ -279,6 +353,36 @@ function render(s){
   else{box.innerHTML=s.slots.map(x=>'<div class="slot"><span class="u">'+x.username+'</span><span class="t">'+x.elapsed+'s</span></div>').join('');}
 }
 async function poll(){try{render(await(await fetch('/api/agent/status')).json());}catch(e){}}
-loadConfig().then(()=>{poll();setInterval(poll,1000);});
+
+let lastRows=[];
+function esc(s){return String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+function renderResults(d){
+  const sm=d.summary||{success:0,failed:0,total:0};
+  $('r_ok').textContent=sm.success; $('r_fail').textContent=sm.failed; $('r_tot').textContent=sm.total;
+  lastRows=d.rows||[];
+  const box=$('restable');
+  if(lastRows.length===0){box.innerHTML='<div class="empty">chưa có kết quả</div>';return;}
+  box.innerHTML=lastRows.map(r=>{
+    const ok=r.status==='success';
+    const info=ok?'':(esc(r.error||'')+(r.reason?(' · '+esc(r.reason)):''));
+    return '<div class="rrow"><span class="rs '+(ok?'ok':'fail')+'">'+(ok?'✓':'✗')+'</span>'+
+      '<span class="ru">'+esc(r.username)+'</span>'+
+      '<span class="ri">'+info+'</span></div>';
+  }).join('');
+}
+async function loadResults(){try{renderResults(await(await fetch('/api/results')).json());}catch(e){}}
+$('clearres').addEventListener('click',async()=>{
+  if(!confirm('Xoá toàn bộ log kết quả?'))return;
+  await fetch('/api/results/clear',{method:'POST'}); loadResults();
+});
+$('export').addEventListener('click',()=>{
+  const head='username,status,error,reason,roblosecurity,ts\n';
+  const body=lastRows.map(r=>[r.username,r.status,r.error||'',(r.reason||'').replace(/[\r\n,]/g,' '),r.roblosecurity||'',r.ts||''].map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([head+body],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='roblox-results-'+Date.now()+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+});
+
+loadConfig().then(()=>{poll();loadResults();setInterval(poll,1000);setInterval(loadResults,2500);});
 </script>
 </body></html>"""

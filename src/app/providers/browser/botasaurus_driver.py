@@ -230,6 +230,15 @@ class BotasaurusSession(BrowserSession):
         cookies = getattr(self._d, "get_cookies", lambda: [])() or []
         return {c["name"]: c["value"] for c in cookies if "name" in c}
 
+    def clear_cookies(self) -> None:
+        """Xoa cookie (+ local storage) de phien sau khong dinh account nay."""
+        for attr in ("delete_cookies_and_local_storage", "delete_cookies"):
+            fn = getattr(self._d, attr, None)
+            if callable(fn):
+                with suppress(Exception):
+                    fn()
+                return
+
     def user_agent(self) -> str:
         ua = getattr(self._d, "user_agent", None)
         if isinstance(ua, str) and ua:
@@ -295,6 +304,8 @@ class BotasaurusProvider(BrowserProvider):
         headless: bool | None = None,
         user_agent: str | None = None,
         profile: str | None = None,
+        window_position: tuple[int, int] | None = None,
+        window_size: tuple[int, int] | None = None,
         **kwargs: Any,
     ):
         try:
@@ -307,8 +318,9 @@ class BotasaurusProvider(BrowserProvider):
         want_headless = self.settings.headless if headless is None else headless
         opts: dict[str, Any] = {
             "headless": want_headless,
-            # Botasaurus muon (w, h); settings luu chuoi "w,h" nen dung .window
-            "window_size": self.settings.window,
+            # Botasaurus muon (w, h); settings luu chuoi "w,h" nen dung .window.
+            # window_size override (vd tiling phone thu nho) -> uu tien.
+            "window_size": window_size or self.settings.window,
         }
         if proxy:
             opts["proxy"] = proxy.url
@@ -316,6 +328,10 @@ class BotasaurusProvider(BrowserProvider):
             opts["user_agent"] = ua
         if profile:
             opts["profile"] = profile
+        # Vi tri cua so tren man hinh (tiling: xep khong de nhau) qua chrome arg.
+        if window_position is not None:
+            x, y = window_position
+            opts.setdefault("arguments", []).append(f"--window-position={x},{y}")
 
         # Nhan = Chrome for Testing (khong dung Chrome goc) neu co san.
         chrome_path = self.settings.chrome_executable_path

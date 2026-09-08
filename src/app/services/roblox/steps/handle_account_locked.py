@@ -15,15 +15,15 @@ from app.automation.result import StepResult
 from app.automation.step import Step
 from app.services.roblox import constants as C
 
-# tim nut Continue theo text (con trong DOM)
+# Nut unlock co text CHINH XAC "Continue" (KHONG phai "Continue in App"/
+# "Continue in browser" cua man app-promo -> tranh bam nham mo app store).
 _HAS_CONTINUE = (
     "return [...document.querySelectorAll('button,[role=button]')]"
-    ".some(x=>/continue/i.test(x.innerText||''));"
+    ".some(x=>(x.innerText||'').trim().toLowerCase()==='continue');"
 )
-# tim nut Continue va bam
 _CLICK_CONTINUE = (
     "const b=[...document.querySelectorAll('button,[role=button]')]"
-    ".find(x=>/continue/i.test(x.innerText||''));"
+    ".find(x=>(x.innerText||'').trim().toLowerCase()==='continue');"
     "if(b){b.scrollIntoView({block:'center'});b.click();return true;}return false;"
 )
 
@@ -52,13 +52,17 @@ class HandleAccountLockedStep(Step):
             # cho extension giai Arkose sau khi bam Continue
             deadline = time.time() + s.timeout
             while time.time() < deadline:
+                body = self._body(ctx)
                 if C.NOT_APPROVED_PATH not in ctx.browser.current_url():
                     return StepResult.ok(self.name, "da mo khoa", attempts=attempt)
-                if self._needs_app(ctx):
+                if "continue in browser" in body:
+                    # man app-promo xuat hien = da giai xong -> coi la mo khoa
+                    return StepResult.ok(self.name, "da mo khoa (app-promo)", attempts=attempt)
+                if any(k in body for k in ("scan this qr", "qr code")):
                     # doi APP MOBILE (quet QR) -> bo tay, de detect_result danh dau
                     ctx.log.info("account_locked_need_app", attempt=attempt)
                     return StepResult.skipped(self.name, "doi app mobile - detect_result xu ly")
-                if self._needs_retry(ctx):
+                if any(k in body for k in ("try unlocking again", "weren't able to unlock")):
                     ctx.log.info("account_locked_retry_prompt", attempt=attempt)
                     break  # thoat vong cho -> bam Continue lai
                 time.sleep(s.poll_interval)
@@ -72,13 +76,3 @@ class HandleAccountLockedStep(Step):
 
     def _body(self, ctx: ExecutionContext) -> str:
         return ctx.browser.text_of("body").lower()
-
-    def _needs_retry(self, ctx: ExecutionContext) -> bool:
-        """Man 'Try unlocking again' = lan giai vua roi that bai -> can bam lai."""
-        txt = self._body(ctx)
-        return any(k in txt for k in ("try unlocking again", "weren't able to unlock", "try again"))
-
-    def _needs_app(self, ctx: ExecutionContext) -> bool:
-        """Bien the doi xac thuc bang app mobile (quet QR)."""
-        txt = self._body(ctx)
-        return any(k in txt for k in ("mobile app", "qr code", "scan this qr"))

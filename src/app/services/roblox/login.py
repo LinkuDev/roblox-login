@@ -8,6 +8,7 @@ from app.services.base import Service, ServiceSpec
 from app.services.registry import service_registry
 from app.services.roblox.steps import (
     DetectLoginResultStep,
+    DismissMobileInterstitialStep,
     FillCredentialsStep,
     Handle2FAStep,
     HandleAccountLockedStep,
@@ -40,6 +41,7 @@ class RobloxLoginService(Service):
                 SolveCaptchaStep(),   # tu bo qua neu khong co captcha
                 Handle2FAStep(),      # tu bo qua neu khong bat 2FA
                 HandleAccountLockedStep(),  # man /not-approved: Continue -> Arkose
+                DismissMobileInterstitialStep(),  # man app-promo: Continue in browser
                 DetectLoginResultStep(),
             ],
         )

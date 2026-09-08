@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import platform
 import sys
 import urllib.request
 import zipfile
@@ -27,7 +28,7 @@ def _platform_key() -> str:
     if sys.platform.startswith("win"):
         return "win64"
     if sys.platform == "darwin":
-        return "mac-arm64" if ("arm" in (sys.platform + str(sys.maxsize))) else "mac-x64"
+        return "mac-arm64" if platform.machine().lower() in ("arm64", "aarch64") else "mac-x64"
     return "linux64"
 
 

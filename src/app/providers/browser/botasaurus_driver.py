@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import stat
+import sys
 import tempfile
 from contextlib import contextmanager, suppress
 from pathlib import Path
@@ -21,6 +23,20 @@ from app.domain.ports import BrowserProvider, BrowserSession
 from app.providers.browser.base import browser_registry
 
 _ext_log = get_logger("browser.ext")
+
+
+def _ensure_executable(chrome_path: Path) -> None:
+    """Cap lai quyen chay cho Chrome for Testing (PyInstaller datas mat bit +x).
+
+    Chi can khi dong goi; dev thi vo hai. Bo qua tren Windows.
+    """
+    if sys.platform.startswith("win"):
+        return
+    cdir = chrome_path.parent
+    for t in (chrome_path, cdir / "chrome_sandbox", cdir / "chrome_crashpad_handler"):
+        with suppress(OSError):
+            if t.exists():
+                t.chmod(t.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 class _LoadableExtension:
@@ -304,6 +320,8 @@ class BotasaurusProvider(BrowserProvider):
         # Nhan = Chrome for Testing (khong dung Chrome goc) neu co san.
         chrome_path = self.settings.chrome_executable_path
         if chrome_path and Path(chrome_path).exists():
+            if getattr(sys, "frozen", False):
+                _ensure_executable(Path(chrome_path))
             opts["chrome_executable_path"] = str(chrome_path)
 
         # Extension YesCaptcha: copy template -> temp + bom clientKey tu config

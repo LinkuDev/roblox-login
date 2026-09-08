@@ -252,7 +252,7 @@ _PAGE = """<!doctype html>
         <input id="max_concurrent" type="number" min="1" max="200" step="1">
       </div>
       <div class="row">
-        <label>Cửa sổ điện thoại (rộng × cao px) — xếp lưới không đè</label>
+        <label>Cửa sổ login desktop (rộng × cao px) — xếp lưới không đè; /not-approved tự về mobile</label>
         <div class="steprow">
           <input id="win_w" type="number" min="200" max="1200" step="10" style="width:80px">
           <span class="val">×</span>
@@ -306,8 +306,8 @@ async function loadConfig(){
   $('ram_range').value=c.ram_overflow_percent||85;
   $('ram_val').textContent=c.ram_overflow_percent||85;
   $('max_concurrent').value=c.max_concurrent||10;
-  $('win_w').value=c.win_w||340;
-  $('win_h').value=c.win_h||620;
+  $('win_w').value=c.win_w||900;
+  $('win_h').value=c.win_h||760;
   drawThresh();
 }
 function drawThresh(){$('thresh').style.left=(+$('ram_range').value)+'%';}

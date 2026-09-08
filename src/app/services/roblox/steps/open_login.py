@@ -11,10 +11,16 @@ class OpenLoginPageStep(Step):
     max_retries = 2   # loi mang -> thu lai
 
     def run(self, ctx: ExecutionContext) -> StepResult:
-        # Trang login = trai nghiem DESKTOP (UA + viewport). Set TRUOC khi goto de
-        # request dung UA desktop. Toi man /not-approved moi chuyen mobile.
-        dw, dh = C.DESKTOP_VIEWPORT
-        ctx.browser.emulate(dw, dh, mobile=False, user_agent=C.DESKTOP_USER_AGENT)
+        # Trang login = trai nghiem DESKTOP, y het PC:
+        # - resize CUA SO OS ra rong -> form login hien day du (fullwidth).
+        # - set UA + Client Hints desktop (KHONG ep viewport -> viewport = cua so that).
+        ctx.browser.resize_window(*C.DESKTOP_WINDOW)
+        ctx.browser.emulate(
+            0, 0, mobile=False,
+            user_agent=C.DESKTOP_USER_AGENT,
+            client_hints=C.DESKTOP_CLIENT_HINTS,
+            set_metrics=False,
+        )
         ctx.browser.goto(C.LOGIN_URL, wait=3)
         # da dang nhap san (profile cu)? Kiem tra bang COOKIE session that, KHONG
         # dua vao navbar - .rbx-navbar co mat ca khi CHUA dang nhap -> de bao nham.

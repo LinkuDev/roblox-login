@@ -36,10 +36,11 @@ class NodeConfig:
     ram_overflow_percent: int = 85
     # 4. song song: so phien browser toi da chay cung luc (kem RAM gate o tren)
     max_concurrent: int = 10
-    # 5. cua so spawn = dien thoai thu nho, xep luoi khong de nhau
-    win_w: int = 340
-    win_h: int = 620
-    win_gap: int = 6
+    # 5. cua so spawn LUC LOGIN = desktop (fullwidth, layout PC); xep luoi khong de
+    #    nhau. Toi man /not-approved flow tu thu nho ve mobile.
+    win_w: int = 900
+    win_h: int = 760
+    win_gap: int = 8
     # kich thuoc man hinh de tinh luoi; 0 = tu do
     screen_w: int = 0
     screen_h: int = 0

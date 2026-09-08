@@ -37,10 +37,16 @@ class HandleAccountLockedStep(Step):
         return C.NOT_APPROVED_PATH in ctx.browser.current_url()
 
     def run(self, ctx: ExecutionContext) -> StepResult:
-        # Toi man /not-approved -> CHUYEN sang MOBILE (UA + viewport) roi reload de
-        # trang render lai theo mobile (login truoc do la desktop).
+        # Toi man /not-approved -> CHUYEN sang MOBILE: thu nho CUA SO OS + emulate
+        # viewport dien thoai + UA/CH mobile, roi reload de trang render lai mobile.
+        ctx.browser.resize_window(*C.MOBILE_WINDOW)
         mw, mh = C.MOBILE_VIEWPORT
-        ctx.browser.emulate(mw, mh, mobile=True, user_agent=C.MOBILE_USER_AGENT, scale_factor=3.0)
+        ctx.browser.emulate(
+            mw, mh, mobile=True,
+            user_agent=C.MOBILE_USER_AGENT,
+            client_hints=C.MOBILE_CLIENT_HINTS,
+            scale_factor=3.0,
+        )
         ctx.browser.reload()
         time.sleep(3)  # cho reload xong
 

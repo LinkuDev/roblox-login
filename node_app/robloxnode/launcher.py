@@ -51,16 +51,19 @@ def _open_window(url: str) -> subprocess.Popen | None:
     chrome = _find_chrome()
     if chrome:
         profile = tempfile.mkdtemp(prefix="rlx-node-ui-")
+        # Mo cua so THUONG (URL positional) thay vi --app: CfT --app voi http://IP:port
+        # hay bi trang. Cua so thuong load on dinh (co address bar - chap nhan duoc).
         args = [
             chrome,
-            f"--app={url}",
+            "--new-window",
             f"--user-data-dir={profile}",
-            "--window-size=440,720",
+            "--window-size=440,760",
             "--no-first-run",
             "--no-default-browser-check",
             "--disable-search-engine-choice-screen",
+            url,
         ]
-        print(f"[ui] mo cua so: {chrome}\n[ui]   --app={url}")
+        print(f"[ui] mo cua so: {chrome}\n[ui]   url={url}")
         return subprocess.Popen(args)
     import webbrowser
 

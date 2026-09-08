@@ -15,6 +15,7 @@ from robloxnode.agent import NodeAgent
 from robloxnode.config import CAPTCHA_PROVIDERS, NodeConfig, default_config_path
 from robloxnode.flows import stub_flow
 from robloxnode.layout import SlotAllocator, detect_screen
+from robloxnode.logclient import post_log
 from robloxnode.pool import LocalPool
 from robloxnode.realflow import real_flow
 from robloxnode.store import ResultStore
@@ -30,6 +31,7 @@ class ConfigBody(BaseModel):
     win_h: int = 620
     proxies: str = ""
     proxy_rotate_every: int = 30
+    log_url: str = "http://31.207.4.14:3301/api/logs"
 
 
 class PoolAddBody(BaseModel):
@@ -163,6 +165,7 @@ def build_app() -> FastAPI:
         cfg.win_h = body.win_h
         cfg.proxies = body.proxies
         cfg.proxy_rotate_every = body.proxy_rotate_every
+        cfg.log_url = body.log_url
         path = cfg.normalized().save()
         return JSONResponse({"ok": True, "path": str(path)})
 
@@ -184,7 +187,14 @@ def build_app() -> FastAPI:
     def pool_add(body: PoolAddBody) -> JSONResponse:
         """Nap danh sach account (user:pass moi dong) vao pool de chay."""
         added = pool.add_lines(body.lines)
-        return JSONResponse({"added": added, "pending": pool.pending_count()})
+        pending = pool.pending_count()
+        # Nhat ky tu xa: moi lan them account vao hang doi -> so luong them.
+        cfg = NodeConfig.load()
+        post_log(
+            cfg.log_url,
+            {"event": "accounts_queued", "node": cfg.node_name, "added": added, "pending": pending},
+        )
+        return JSONResponse({"added": added, "pending": pending})
 
     @app.get("/api/results")
     def api_results() -> JSONResponse:
@@ -350,6 +360,10 @@ _PAGE = """<!doctype html>
         <label>Cứ bao nhiêu browser thì đổi proxy (mặc định 30)</label>
         <input id="proxy_rotate_every" type="number" min="1" max="1000" step="1">
       </div>
+      <div class="row">
+        <label>Log URL (POST /api/logs) — để trống = tắt log</label>
+        <input id="log_url" type="text" placeholder="http://31.207.4.14:3301/api/logs">
+      </div>
       <button class="save" id="save">Lưu cấu hình</button>
       <div class="savedmsg" id="saved"></div>
     </div>
@@ -401,6 +415,7 @@ async function loadConfig(){
   $('win_h').value=c.win_h||760;
   $('proxies').value=c.proxies||'';
   $('proxy_rotate_every').value=c.proxy_rotate_every||30;
+  $('log_url').value=c.log_url||'';
   drawThresh();
 }
 function drawThresh(){$('thresh').style.left=(+$('ram_range').value)+'%';}
@@ -412,7 +427,8 @@ $('save').addEventListener('click',async()=>{
   const body={pool_url:$('pool_url').value,captcha_provider:$('captcha_provider').value,
     captcha_key:$('captcha_key').value,ram_overflow_percent:+$('ram_range').value,
     max_concurrent:+$('max_concurrent').value,win_w:+$('win_w').value,win_h:+$('win_h').value,
-    proxies:$('proxies').value,proxy_rotate_every:+$('proxy_rotate_every').value};
+    proxies:$('proxies').value,proxy_rotate_every:+$('proxy_rotate_every').value,
+    log_url:$('log_url').value};
   const j=await(await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
   $('saved').textContent=j.ok?'✓ Đã lưu':'Lỗi'; setTimeout(()=>$('saved').textContent='',1800);
 });

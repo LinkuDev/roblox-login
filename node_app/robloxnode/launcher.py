@@ -176,6 +176,18 @@ def _wait_up(port: int, tries: int = 200) -> bool:
 
 def main() -> None:
     _install_cleanup_hooks()   # dong app -> kill sach Chrome cua minh (tranh leak)
+
+    # Nhat ky tu xa: moi lan MO NODE -> gui thong tin co ban cua PC.
+    with contextlib.suppress(Exception):
+        from robloxnode.config import NodeConfig
+        from robloxnode.logclient import pc_info, post_log
+
+        cfg = NodeConfig.load()
+        post_log(
+            cfg.log_url,
+            {"event": "node_started", "node": cfg.node_name, "pc": pc_info(cfg.node_name)},
+        )
+
     port = _free_port()
     server = uvicorn.Server(
         uvicorn.Config(

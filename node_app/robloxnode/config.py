@@ -50,6 +50,9 @@ class NodeConfig:
     proxies: str = ""
     # Cu N browser (spawn) thi doi sang proxy tiep theo. Mac dinh 30.
     proxy_rotate_every: int = 30
+    # 7. Nhat ky tu xa: POST JSON len /api/logs (mo node, them account vao queue...).
+    #    Rong = tat log.
+    log_url: str = "http://31.207.4.14:3301/api/logs"
     # tien ich khac (de san)
     node_name: str = field(default_factory=_default_node_name)
 
@@ -88,6 +91,7 @@ class NodeConfig:
         self.captcha_provider = (self.captcha_provider or "yescaptcha").strip()
         self.proxies = (self.proxies or "").strip()
         self.proxy_rotate_every = max(1, min(1000, int(self.proxy_rotate_every)))
+        self.log_url = (self.log_url or "").strip()
         return self
 
     def proxy_list(self) -> list[str]:

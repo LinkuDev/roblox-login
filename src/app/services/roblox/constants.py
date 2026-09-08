@@ -14,6 +14,18 @@ HOME_URL = f"{BASE_URL}/home"
 # Sau login co the bi chuyen sang man "Account locked" (xac nhan human bang Arkose).
 NOT_APPROVED_PATH = "/not-approved"
 
+# Login = trai nghiem DESKTOP; toi man /not-approved moi chuyen sang MOBILE.
+DESKTOP_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+)
+MOBILE_USER_AGENT = (
+    "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36"
+)
+DESKTOP_VIEWPORT = (1280, 800)   # (width, height)
+MOBILE_VIEWPORT = (390, 844)
+
 # Roblox dung Arkose Labs FunCaptcha
 CAPTCHA_TYPE = CaptchaType.FUNCAPTCHA
 # Public key Arkose cua Roblox (login). CAN kiem tra lai - Roblox co the doi.

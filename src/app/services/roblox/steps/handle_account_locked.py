@@ -34,14 +34,20 @@ class HandleAccountLockedStep(Step):
     max_attempts = 3         # so lan bam Continue toi da
 
     def should_run(self, ctx: ExecutionContext) -> bool:
-        # Chi chay khi o /not-approved VA co nut Continue de bam. Neu la bien the
-        # doi APP MOBILE (quet QR, khong co Continue) -> bo qua, detect_result se
-        # danh dau need_mobile_app.
-        if C.NOT_APPROVED_PATH not in ctx.browser.current_url():
-            return False
-        return bool(ctx.browser.run_js(_HAS_CONTINUE))
+        return C.NOT_APPROVED_PATH in ctx.browser.current_url()
 
     def run(self, ctx: ExecutionContext) -> StepResult:
+        # Toi man /not-approved -> CHUYEN sang MOBILE (UA + viewport) roi reload de
+        # trang render lai theo mobile (login truoc do la desktop).
+        mw, mh = C.MOBILE_VIEWPORT
+        ctx.browser.emulate(mw, mh, mobile=True, user_agent=C.MOBILE_USER_AGENT, scale_factor=3.0)
+        ctx.browser.reload()
+        time.sleep(3)  # cho reload xong
+
+        # Man doi APP MOBILE (quet QR, khong co Continue) -> bo tay, detect_result danh dau.
+        if not ctx.browser.run_js(_HAS_CONTINUE):
+            return StepResult.skipped(self.name, "khong co Continue - detect_result xu ly")
+
         s = ctx.settings.captcha
         for attempt in range(1, self.max_attempts + 1):
             clicked = bool(ctx.browser.run_js(_CLICK_CONTINUE))

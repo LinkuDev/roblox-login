@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from app.automation.context import ExecutionContext
 from app.automation.result import StepResult
 from app.automation.step import Step
@@ -11,8 +13,10 @@ class DetectLoginResultStep(Step):
     """Xac dinh ket qua cuoi: thanh cong -> lay cookie; that bai -> phan loai loi."""
 
     name = "detect_result"
+    settle_timeout = 15   # cho toi khi co trang thai dut diem truoc khi phan loai
 
     def run(self, ctx: ExecutionContext) -> StepResult:
+        self._wait_settle(ctx)   # tranh doc qua som -> "khong ro nguyen nhan"
         body = ctx.browser.text_of("body").lower()
         # Man app-promo mobile ("Continue in browser") = XUAT HIEN SAU khi giai xong
         # -> coi la THANH CONG (khac han man /not-approved doi quet QR).
@@ -47,6 +51,23 @@ class DetectLoginResultStep(Step):
         return StepResult.failed(
             self.name, err or "dang nhap that bai khong ro nguyen nhan", "login_failed"
         )
+
+    def _wait_settle(self, ctx: ExecutionContext) -> None:
+        """Cho toi khi trang co ket qua DUT DIEM roi moi phan loai:
+        cookie / co chu loi / /not-approved / app-promo. Tranh doc luc con spinner
+        -> "khong ro nguyen nhan"."""
+        deadline = time.time() + self.settle_timeout
+        while time.time() < deadline:
+            if C.COOKIE_SESSION in ctx.browser.cookies():
+                return
+            if C.NOT_APPROVED_PATH in ctx.browser.current_url():
+                return
+            body = ctx.browser.text_of("body").lower()
+            if "continue in browser" in body:
+                return
+            if ctx.browser.text_of(C.SEL_ERROR).strip():
+                return
+            time.sleep(1)
 
     def _capture_success(self, ctx: ExecutionContext, cookies: dict | None = None) -> StepResult:
         cookies = cookies or ctx.browser.cookies()

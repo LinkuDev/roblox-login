@@ -47,6 +47,19 @@ class BrowserSession(ABC):
     def clear_cookies(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
         """Xoa cookie phien hien tai (provider override neu ho tro)."""
 
+    def emulate(  # noqa: B027 - hook tuy chon, mac dinh no-op
+        self,
+        width: int,
+        height: int,
+        mobile: bool = False,
+        user_agent: str | None = None,
+        scale_factor: float = 1.0,
+    ) -> None:
+        """Doi viewport width + UA (desktop<->mobile). Provider override neu ho tro."""
+
+    def reload(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
+        """Tai lai trang hien tai (provider override neu ho tro)."""
+
     @abstractmethod
     def user_agent(self) -> str: ...
 

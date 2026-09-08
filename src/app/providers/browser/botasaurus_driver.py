@@ -239,6 +239,37 @@ class BotasaurusSession(BrowserSession):
                     fn()
                 return
 
+    def emulate(
+        self,
+        width: int,
+        height: int,
+        mobile: bool = False,
+        user_agent: str | None = None,
+        scale_factor: float = 1.0,
+    ) -> None:
+        """Doi viewport (width layout) + UA runtime qua CDP -> chuyen desktop<->mobile
+        ma KHONG resize cua so OS (giu tiling)."""
+        from botasaurus_driver import cdp
+
+        with suppress(Exception):
+            self._d.run_cdp_command(
+                cdp.emulation.set_device_metrics_override(
+                    width=int(width),
+                    height=int(height),
+                    device_scale_factor=float(scale_factor),
+                    mobile=bool(mobile),
+                )
+            )
+        if user_agent:
+            with suppress(Exception):
+                self._d.run_cdp_command(
+                    cdp.emulation.set_user_agent_override(user_agent=user_agent)
+                )
+
+    def reload(self) -> None:
+        with suppress(Exception):
+            self._d.reload()
+
     def user_agent(self) -> str:
         ua = getattr(self._d, "user_agent", None)
         if isinstance(ua, str) and ua:

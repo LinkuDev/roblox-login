@@ -46,7 +46,17 @@ def build_app() -> FastAPI:
         sw, sh = c.screen_w, c.screen_h
         if sw <= 0 or sh <= 0:
             sw, sh = detect_screen()
-        return SlotAllocator((sw, sh), (c.win_w, c.win_h), gap=c.win_gap)
+        # Grid CHI dung khi chuyen sang MOBILE (/not-approved) -> tile theo MOBILE_WINDOW.
+        # O luoi phai >= cua so mobile de cac phien khong de len nhau.
+        win_w, win_h = c.win_w, c.win_h
+        try:
+            from app.services.roblox.constants import MOBILE_WINDOW
+
+            win_w = max(win_w, MOBILE_WINDOW[0])
+            win_h = max(win_h, MOBILE_WINDOW[1])
+        except Exception:  # noqa: BLE001 - flow-core vang -> dung config
+            pass
+        return SlotAllocator((sw, sh), (win_w, win_h), gap=c.win_gap)
 
     store = ResultStore()   # DB local: dung chung cho agent (ghi) va /api/results (doc)
     agent = NodeAgent(

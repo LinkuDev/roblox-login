@@ -25,11 +25,27 @@ class DetectLoginResultStep(Step):
         # Van ket o man "Account locked" (/not-approved) = CHUA thanh cong, du co
         # cookie. Tru khi da la man app-promo (da giai xong).
         if C.NOT_APPROVED_PATH in ctx.browser.current_url() and not app_promo:
-            ctx.snapshot("account_locked")
             # Bien the doi xac thuc bang APP MOBILE (QUET QR) - khong co nut de bam
             # -> automation bo tay, danh dau fail rieng de update record.
             if any(k in body for k in ("scan this qr", "qr code")):
+                ctx.snapshot("account_locked")
                 raise NeedMobileApp("failed because need app", detail="not-approved: qr")
+
+            # DETECTOR TRUOC KHI CLOSE: dang o /not-approved (co the modal loading /
+            # captcha reset) ma KHONG phai QR -> coi nhu con o luong not-approved,
+            # QUAY LAI luong tu dau (1 lan) truoc khi ket luan khoa. HandleAccountLocked
+            # tu co vong re-entry ben trong nen chay lai them 1 lan la du manh.
+            if not ctx.get("_relock_guarded"):
+                ctx.set("_relock_guarded", True)
+                ctx.log.info("detect_result_reguard_not_approved")
+                from app.services.roblox.steps.handle_account_locked import (
+                    HandleAccountLockedStep,
+                )
+
+                HandleAccountLockedStep().run(ctx)   # vao lai luong not-approved tu dau
+                return self.run(ctx)                 # danh gia lai tu dau
+
+            ctx.snapshot("account_locked")
             raise AccountLocked("tai khoan bi khoa - chua mo duoc", detail=C.NOT_APPROVED_PATH)
 
         # thanh cong = app-promo (da giai xong) HOAC co cookie session that.

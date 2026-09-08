@@ -309,24 +309,28 @@ class BotasaurusSession(BrowserSession):
         with suppress(Exception):
             self._d.reload()
 
-    def resize_window(self, width: int, height: int) -> None:
-        """Resize CUA SO OS that (khong phai viewport) qua CDP Browser.setWindowBounds.
-        Login = rong (desktop), /not-approved = hep (mobile)."""
+    def resize_window(
+        self, width: int, height: int, x: int | None = None, y: int | None = None
+    ) -> None:
+        """Resize (va tuy chon REPOSITION) CUA SO OS that qua CDP Browser.setWindowBounds.
+        Login = rong (desktop, maximize). /not-approved = hep (mobile) + dat vao o luoi
+        (x, y) de cac phien khong de len nhau."""
         from botasaurus_driver import cdp
 
         with suppress(Exception):
             window_id, _ = self._d.run_cdp_command(cdp.browser.get_window_for_target())
-            # NORMAL truoc (bo maximize neu dang maximize) roi moi set width/height
+            # NORMAL truoc (bo maximize neu dang maximize) roi moi set bounds
             self._d.run_cdp_command(
                 cdp.browser.set_window_bounds(
                     window_id, cdp.browser.Bounds(window_state=cdp.browser.WindowState.NORMAL)
                 )
             )
+            bounds_kw: dict[str, int] = {"width": int(width), "height": int(height)}
+            if x is not None and y is not None:
+                bounds_kw["left"] = int(x)
+                bounds_kw["top"] = int(y)
             self._d.run_cdp_command(
-                cdp.browser.set_window_bounds(
-                    window_id,
-                    cdp.browser.Bounds(width=int(width), height=int(height)),
-                )
+                cdp.browser.set_window_bounds(window_id, cdp.browser.Bounds(**bounds_kw))
             )
 
     def maximize_window(self) -> None:

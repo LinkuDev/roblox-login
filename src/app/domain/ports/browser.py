@@ -61,8 +61,10 @@ class BrowserSession(ABC):
     def reload(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
         """Tai lai trang hien tai (provider override neu ho tro)."""
 
-    def resize_window(self, width: int, height: int) -> None:  # noqa: B027
-        """Resize cua so OS that (provider override neu ho tro)."""
+    def resize_window(  # noqa: B027
+        self, width: int, height: int, x: int | None = None, y: int | None = None
+    ) -> None:
+        """Resize (va tuy chon reposition den x,y) cua so OS that (provider override)."""
 
     def maximize_window(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
         """Phong to cua so full man hinh (provider override neu ho tro)."""

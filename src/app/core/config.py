@@ -109,6 +109,9 @@ class BrowserSettings(BaseSettings):
     captcha_config_overrides: dict[str, Any] = Field(
         default_factory=lambda: {
             "autorun": True,
+            # So lan giai toi da truoc khi extension dung (mac dinh config.js la 20).
+            "isOpenEndTimes": True,
+            "endTimes": "60",
             "funcaptchaConfig": {
                 "isOpen": True,
                 "isAutoClickPrePage": True,

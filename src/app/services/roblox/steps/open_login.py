@@ -13,6 +13,7 @@ class OpenLoginPageStep(Step):
     def run(self, ctx: ExecutionContext) -> StepResult:
         # Trang login = trai nghiem DESKTOP, y het PC:
         # - MAXIMIZE cua so -> fullwidth nhu mo tren may tinh (form hien day du).
+        #   (Grid tiling chi ap dung khi chuyen sang MOBILE o man /not-approved.)
         # - set UA + Client Hints desktop (KHONG ep viewport -> viewport = cua so that).
         ctx.browser.maximize_window()
         ctx.browser.emulate(

@@ -6,7 +6,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.enums import JobStatus, PointTxType, UserRole
+from app.core.enums import JobStatus, PointTxType
 from app.db.models import (
     Deposit,
     Order,

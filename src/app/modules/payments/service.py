@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.core.enums import DepositStatus, NotificationLevel, PointTxType
-from app.core.errors import BusinessError, NotFoundError, PermissionDenied
+from app.core.errors import BusinessError, NotFoundError
 from app.db.models import Deposit
 from app.db.repositories import DepositRepository
 from app.modules.billing import BillingService

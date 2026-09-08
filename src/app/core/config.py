@@ -111,7 +111,7 @@ class BrowserSettings(BaseSettings):
             "autorun": True,
             # So lan giai toi da truoc khi extension dung (mac dinh config.js la 20).
             "isOpenEndTimes": True,
-            "endTimes": "60",
+            "endTimes": "40",
             "funcaptchaConfig": {
                 "isOpen": True,
                 "isAutoClickPrePage": True,

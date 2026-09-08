@@ -51,6 +51,8 @@ _STATE_JS = (
     f"const captcha=!!document.querySelector({json.dumps(C.SEL_CAPTCHA_FRAME)});"
     "return {"
     "notApproved: url.includes('/not-approved'),"
+    "home: url.includes('/home'),"
+    "root: (location.pathname==='/'||location.pathname===''),"
     f"appPromo: {json.dumps(list(C.APP_PROMO_TEXTS))}.some(t=>body.includes(t)),"
     "qr: body.includes('scan this qr')||body.includes('qr code'),"
     "retry: body.includes('try unlocking again')||body.includes(\"weren't able to unlock\"),"
@@ -230,9 +232,14 @@ class HandleAccountLockedStep(Step):
             return "loading"          # nut dang spinner sau khi bam
         if st.get("qr"):
             return "need_app"
-        # Chi coi UNLOCKED khi KHONG con challenge/continue/busy/modal ma da roi
-        # not-approved (hoac hien app-promo). Con modal -> loading (cho tiep).
-        if (not st.get("notApproved") or st.get("appPromo")) and not st.get("modal"):
+        # DA DANG NHAP THAT: app-promo (Explore Roblox) / da vao /home / route "/"
+        # -> UNLOCKED ngay, KE CA co modal (man app-promo chinh la 1 dialog, va trang
+        # dich sau khi mo khoa la route "/"). Debounce 4s o _try_unlock se chan truong
+        # hop "/" thoang qua truoc khi redirect /not-approved (locked account).
+        if st.get("appPromo") or st.get("home") or st.get("root"):
+            return "unlocked"
+        # Roi not-approved (URL khac), khong con modal -> unlocked (trang sach).
+        if not st.get("notApproved") and not st.get("modal"):
             return "unlocked"
         if st.get("modal"):
             return "loading"

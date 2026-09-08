@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.request
 
 import uvicorn
 
@@ -50,29 +51,35 @@ def _open_window(url: str) -> subprocess.Popen | None:
     chrome = _find_chrome()
     if chrome:
         profile = tempfile.mkdtemp(prefix="rlx-node-ui-")
-        return subprocess.Popen(
-            [
-                chrome,
-                f"--app={url}",
-                f"--user-data-dir={profile}",
-                "--window-size=440,720",
-                "--no-first-run",
-                "--no-default-browser-check",
-            ]
-        )
+        args = [
+            chrome,
+            f"--app={url}",
+            f"--user-data-dir={profile}",
+            "--window-size=440,720",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-search-engine-choice-screen",
+        ]
+        print(f"[ui] mo cua so: {chrome}\n[ui]   --app={url}")
+        return subprocess.Popen(args)
     import webbrowser
 
+    print(f"[ui] khong thay chrome -> mo trinh duyet mac dinh: {url}")
     webbrowser.open(url)
     return None
 
 
-def _wait_up(port: int, tries: int = 100) -> None:
+def _wait_up(port: int, tries: int = 200) -> bool:
+    """Doi den khi server tra HTTP 200 that (khong chi TCP) -> tranh mo cua so
+    truoc khi server san sang khien trang trang."""
+    url = f"http://127.0.0.1:{port}/"
     for _ in range(tries):
-        with contextlib.suppress(OSError), socket.create_connection(
-            ("127.0.0.1", port), timeout=0.2
-        ):
-            return
+        with contextlib.suppress(Exception):
+            with urllib.request.urlopen(url, timeout=0.4) as r:  # noqa: S310
+                if getattr(r, "status", 200) == 200:
+                    return True
         time.sleep(0.1)
+    return False
 
 
 def main() -> None:
@@ -94,10 +101,13 @@ def main() -> None:
     )
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
-    _wait_up(port)
 
     url = f"http://127.0.0.1:{port}"
     print(f"Node config UI: {url}")
+    if _wait_up(port):
+        print("[ui] server san sang (HTTP 200)")
+    else:
+        print("[ui] CANH BAO: server chua tra 200, van thu mo cua so")
     proc = _open_window(url)
     try:
         if proc is not None:

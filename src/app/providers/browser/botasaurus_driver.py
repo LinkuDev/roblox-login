@@ -316,14 +316,31 @@ class BotasaurusSession(BrowserSession):
 
         with suppress(Exception):
             window_id, _ = self._d.run_cdp_command(cdp.browser.get_window_for_target())
-            bounds = cdp.browser.Bounds(
-                left=None,
-                top=None,
-                width=int(width),
-                height=int(height),
-                window_state=cdp.browser.WindowState.NORMAL,
+            # NORMAL truoc (bo maximize neu dang maximize) roi moi set width/height
+            self._d.run_cdp_command(
+                cdp.browser.set_window_bounds(
+                    window_id, cdp.browser.Bounds(window_state=cdp.browser.WindowState.NORMAL)
+                )
             )
-            self._d.run_cdp_command(cdp.browser.set_window_bounds(window_id, bounds))
+            self._d.run_cdp_command(
+                cdp.browser.set_window_bounds(
+                    window_id,
+                    cdp.browser.Bounds(width=int(width), height=int(height)),
+                )
+            )
+
+    def maximize_window(self) -> None:
+        """Phong to cua so full man hinh (login = trai nghiem PC fullwidth)."""
+        from botasaurus_driver import cdp
+
+        with suppress(Exception):
+            window_id, _ = self._d.run_cdp_command(cdp.browser.get_window_for_target())
+            self._d.run_cdp_command(
+                cdp.browser.set_window_bounds(
+                    window_id,
+                    cdp.browser.Bounds(window_state=cdp.browser.WindowState.MAXIMIZED),
+                )
+            )
 
     def user_agent(self) -> str:
         ua = getattr(self._d, "user_agent", None)

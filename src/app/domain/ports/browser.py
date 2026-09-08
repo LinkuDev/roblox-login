@@ -64,6 +64,9 @@ class BrowserSession(ABC):
     def resize_window(self, width: int, height: int) -> None:  # noqa: B027
         """Resize cua so OS that (provider override neu ho tro)."""
 
+    def maximize_window(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
+        """Phong to cua so full man hinh (provider override neu ho tro)."""
+
     @abstractmethod
     def user_agent(self) -> str: ...
 

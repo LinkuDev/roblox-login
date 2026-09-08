@@ -54,11 +54,15 @@ class BrowserSession(ABC):
         mobile: bool = False,
         user_agent: str | None = None,
         scale_factor: float = 1.0,
+        client_hints: dict | None = None,
     ) -> None:
-        """Doi viewport width + UA (desktop<->mobile). Provider override neu ho tro."""
+        """Gia lap thiet bi (viewport + UA + Client Hints). Provider override neu ho tro."""
 
     def reload(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
         """Tai lai trang hien tai (provider override neu ho tro)."""
+
+    def resize_window(self, width: int, height: int) -> None:  # noqa: B027
+        """Resize cua so OS that (provider override neu ho tro)."""
 
     @abstractmethod
     def user_agent(self) -> str: ...

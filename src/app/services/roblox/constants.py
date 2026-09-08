@@ -26,6 +26,39 @@ MOBILE_USER_AGENT = (
 DESKTOP_VIEWPORT = (1280, 800)   # (width, height)
 MOBILE_VIEWPORT = (390, 844)
 
+# Kich thuoc CUA SO OS that: login = rong (desktop, form hien day du, layout PC);
+# /not-approved = hep (Chrome min-width ~500 nen khong the < ~500).
+DESKTOP_WINDOW = (900, 760)
+MOBILE_WINDOW = (500, 860)
+
+# Client Hints (Sec-CH-UA-*) + navigator.platform de "y het PC / dien thoai" -
+# khong chi UA string. Khop Chrome 152 cua Chrome for Testing.
+_CHROME_MAJOR = "152"
+_CHROME_FULL = "152.0.7977.82"
+_BRANDS = [("Chromium", _CHROME_MAJOR), ("Google Chrome", _CHROME_MAJOR), ("Not?A_Brand", "99")]
+DESKTOP_CLIENT_HINTS = {
+    "platform": "Windows",
+    "platform_version": "15.0.0",
+    "architecture": "x86",
+    "model": "",
+    "mobile": False,
+    "bitness": "64",
+    "brands": _BRANDS,
+    "full_version": _CHROME_FULL,
+    "nav_platform": "Win32",
+}
+MOBILE_CLIENT_HINTS = {
+    "platform": "Android",
+    "platform_version": "14.0.0",
+    "architecture": "",
+    "model": "Pixel 7",
+    "mobile": True,
+    "bitness": "",
+    "brands": _BRANDS,
+    "full_version": _CHROME_FULL,
+    "nav_platform": "Linux armv8l",
+}
+
 # Roblox dung Arkose Labs FunCaptcha
 CAPTCHA_TYPE = CaptchaType.FUNCAPTCHA
 # Public key Arkose cua Roblox (login). CAN kiem tra lai - Roblox co the doi.

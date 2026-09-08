@@ -246,29 +246,84 @@ class BotasaurusSession(BrowserSession):
         mobile: bool = False,
         user_agent: str | None = None,
         scale_factor: float = 1.0,
+        client_hints: dict | None = None,
+        set_metrics: bool = True,
     ) -> None:
-        """Doi viewport (width layout) + UA runtime qua CDP -> chuyen desktop<->mobile
-        ma KHONG resize cua so OS (giu tiling)."""
+        """Gia lap thiet bi (viewport + UA + Client Hints + touch) qua CDP -> "y het"
+        PC hoac dien thoai. KHONG resize cua so OS (dung resize_window cho viec do).
+
+        set_metrics=False: chi doi UA/CH/touch, KHONG ep viewport (de viewport = cua so
+        that -> desktop layout hien day du trong cua so rong).
+        client_hints: dict (xem constants.*_CLIENT_HINTS) set Sec-CH-UA-* + navigator
+        .platform/userAgentData - tranh lo mismatch UA vs client hints.
+        """
         from botasaurus_driver import cdp
 
-        with suppress(Exception):
-            self._d.run_cdp_command(
-                cdp.emulation.set_device_metrics_override(
-                    width=int(width),
-                    height=int(height),
-                    device_scale_factor=float(scale_factor),
-                    mobile=bool(mobile),
-                )
-            )
-        if user_agent:
+        if set_metrics:
             with suppress(Exception):
                 self._d.run_cdp_command(
-                    cdp.emulation.set_user_agent_override(user_agent=user_agent)
+                    cdp.emulation.set_device_metrics_override(
+                        width=int(width),
+                        height=int(height),
+                        device_scale_factor=float(scale_factor),
+                        mobile=bool(mobile),
+                    )
+                )
+        with suppress(Exception):
+            self._d.run_cdp_command(cdp.emulation.set_touch_emulation_enabled(enabled=bool(mobile)))
+        if user_agent:
+            meta = None
+            nav_platform = None
+            if client_hints:
+                ch = client_hints
+                brands = [
+                    cdp.emulation.UserAgentBrandVersion(brand=b, version=v)
+                    for b, v in ch.get("brands", [])
+                ]
+                full_list = [
+                    cdp.emulation.UserAgentBrandVersion(brand=b, version=ch.get("full_version", ""))
+                    for b, _ in ch.get("brands", [])
+                ]
+                meta = cdp.emulation.UserAgentMetadata(
+                    platform=ch.get("platform", ""),
+                    platform_version=ch.get("platform_version", ""),
+                    architecture=ch.get("architecture", ""),
+                    model=ch.get("model", ""),
+                    mobile=ch.get("mobile", mobile),
+                    brands=brands,
+                    full_version_list=full_list,
+                    full_version=ch.get("full_version"),
+                    bitness=ch.get("bitness", ""),
+                )
+                nav_platform = ch.get("nav_platform")
+            with suppress(Exception):
+                self._d.run_cdp_command(
+                    cdp.emulation.set_user_agent_override(
+                        user_agent=user_agent,
+                        platform=nav_platform,
+                        user_agent_metadata=meta,
+                    )
                 )
 
     def reload(self) -> None:
         with suppress(Exception):
             self._d.reload()
+
+    def resize_window(self, width: int, height: int) -> None:
+        """Resize CUA SO OS that (khong phai viewport) qua CDP Browser.setWindowBounds.
+        Login = rong (desktop), /not-approved = hep (mobile)."""
+        from botasaurus_driver import cdp
+
+        with suppress(Exception):
+            window_id, _ = self._d.run_cdp_command(cdp.browser.get_window_for_target())
+            bounds = cdp.browser.Bounds(
+                left=None,
+                top=None,
+                width=int(width),
+                height=int(height),
+                window_state=cdp.browser.WindowState.NORMAL,
+            )
+            self._d.run_cdp_command(cdp.browser.set_window_bounds(window_id, bounds))
 
     def user_agent(self) -> str:
         ua = getattr(self._d, "user_agent", None)

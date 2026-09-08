@@ -13,7 +13,7 @@ class DetectLoginResultStep(Step):
     """Xac dinh ket qua cuoi: thanh cong -> lay cookie; that bai -> phan loai loi."""
 
     name = "detect_result"
-    settle_timeout = 15   # cho toi khi co trang thai dut diem truoc khi phan loai
+    settle_timeout = 25   # cho toi khi co trang thai dut diem truoc khi phan loai
 
     def run(self, ctx: ExecutionContext) -> StepResult:
         self._wait_settle(ctx)   # tranh doc qua som -> "khong ro nguyen nhan"
@@ -69,17 +69,25 @@ class DetectLoginResultStep(Step):
         )
 
     def _wait_settle(self, ctx: ExecutionContext) -> None:
-        """Cho toi khi trang co ket qua DUT DIEM roi moi phan loai:
-        cookie / co chu loi / /not-approved / app-promo. Tranh doc luc con spinner
-        -> "khong ro nguyen nhan"."""
+        """Cho toi khi trang ve trang thai TERMINAL that su roi moi phan loai:
+        /not-approved (khoa) / /home (logged in) / app-promo / co chu loi.
+
+        QUAN TRONG: KHONG dung "co cookie" lam dieu kien settle. Cookie .ROBLOSECURITY
+        duoc set NGAY sau login KE CA khi account bi khoa (login OK -> set cookie ->
+        RỒI moi redirect /not-approved). Neu thoat settle ngay khi thay cookie, ta co
+        the chot success TRUOC khi man /not-approved kip render -> FALSE SUCCESS.
+        """
         deadline = time.time() + self.settle_timeout
         while time.time() < deadline:
-            if C.COOKIE_SESSION in ctx.browser.cookies():
+            url = ctx.browser.current_url()
+            if C.NOT_APPROVED_PATH in url:            # khoa -> terminal
                 return
-            if C.NOT_APPROVED_PATH in ctx.browser.current_url():
+            if "/home" in url:                        # da vao home -> logged in
                 return
             body = ctx.browser.text_of("body").lower()
-            if "continue in browser" in body:
+            if "continue in browser" in body:         # app-promo (da mo khoa) -> terminal
+                return
+            if any(k in body for k in ("scan this qr", "qr code")):  # QR -> terminal
                 return
             if ctx.browser.text_of(C.SEL_ERROR).strip():
                 return

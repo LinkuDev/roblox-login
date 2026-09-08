@@ -73,7 +73,19 @@ class HandleAccountLockedStep(Step):
     max_reentries = 3        # so lan vao lai luong (khi modal reset)
     reentry_timeout_bonus = 30   # moi lan re-entry cong them (giay) vao timeout cho
 
+    redirect_wait = 8   # giay cho redirect /not-approved sau login (co the cham)
+
     def should_run(self, ctx: ExecutionContext) -> bool:
+        # Redirect sang /not-approved co the den VAI GIAY sau login -> poll, dung
+        # check 1 lan roi skip (skip nham -> detect_result se bao success tren cookie).
+        deadline = time.time() + self.redirect_wait
+        while time.time() < deadline:
+            url = ctx.browser.current_url()
+            if C.NOT_APPROVED_PATH in url:
+                return True
+            if "/home" in url:   # da vao home that -> khong khoa, khoi cho
+                return False
+            time.sleep(1)
         return C.NOT_APPROVED_PATH in ctx.browser.current_url()
 
     def run(self, ctx: ExecutionContext) -> StepResult:

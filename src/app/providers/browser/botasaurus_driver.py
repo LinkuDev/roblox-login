@@ -11,6 +11,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
@@ -178,14 +179,43 @@ class BotasaurusSession(BrowserSession):
 
     # --- element -----------------------------------------------------------
     def wait_for(self, selector: str, timeout: float | None = None) -> Any:
-        timeout = timeout or self._settings.timeout
+        """Cho element, PAUSE dong ho timeout trong luc trang dang tai.
+
+        Timeout chi dem thoi gian khi trang DA TAI XONG ('complete') ma van chua thay
+        element -> giu nguyen y nghia timeout cu, KHONG dinh flow cu: trang tai nhanh
+        thi hanh vi y het truoc (idle ~ thoi gian that); chi khi proxy cham lam trang
+        tai lau thi khoang thoi gian TAI do khong bi tinh vao timeout. Van co tran cung
+        tong the de khong treo mai khi proxy chet (trang khong bao gio 'complete').
+        """
+        timeout = float(timeout or self._settings.timeout)
+        poll = 0.5
+        start = last = time.time()
+        idle_spent = 0.0                      # chi cong khi trang da 'complete'
+        hard_cap = max(timeout * 4, timeout + 60)
+        while True:
+            with suppress(Exception):
+                el = self._d.select(selector, wait=0)
+                if el is not None:
+                    return el
+            now = time.time()
+            if not self._page_loading():
+                idle_spent += now - last      # dang tai -> PAUSE (khong cong)
+            last = now
+            if idle_spent >= timeout:
+                raise BrowserError(
+                    f"khong thay '{selector}' sau {int(idle_spent)}s idle (tong {int(now - start)}s)"
+                )
+            if now - start >= hard_cap:       # tran cung: proxy treo, khong bao gio 'complete'
+                raise BrowserError(f"khong thay '{selector}' - qua {int(now - start)}s (tran cung)")
+            time.sleep(poll)
+
+    def _page_loading(self) -> bool:
+        """True neu trang dang tai (readyState != 'complete', hoac khong doc duoc ->
+        coi nhu dang chuyen trang -> pause timeout)."""
         try:
-            el = self._d.wait_for_element(selector, wait=int(timeout))
-        except Exception as exc:
-            raise BrowserError(f"khong thay '{selector}' sau {timeout}s: {exc}") from exc
-        if el is None:
-            raise BrowserError(f"khong thay '{selector}' sau {timeout}s")
-        return el
+            return self._d.run_js("return document.readyState") != "complete"
+        except Exception:
+            return True
 
     def exists(self, selector: str, timeout: float = 0) -> bool:
         try:
@@ -476,6 +506,11 @@ class BotasaurusProvider(BrowserProvider):
             # window_size override (vd tiling phone thu nho) -> uu tien.
             "window_size": window_size or self.settings.window,
         }
+        # PROXY cham -> get() tra ve ngay khi DOM 'interactive' (khong cho tai het
+        # anh/font/subresource nhu 'complete'). Element van doi rieng qua wait_for
+        # (loading-aware) nen khong lo thao tac som. -> tranh block lau luc tai trang.
+        if proxy is not None:
+            opts["wait_for_complete_page_load"] = False
         # PROXY: KHONG truyen cho Driver (proxy co user:pass se keo botasaurus dung
         # Node.js). Thay vao do dung 1 extension MV3 tu lo proxy + auth (xem duoi).
         if ua := (user_agent or self.settings.user_agent):

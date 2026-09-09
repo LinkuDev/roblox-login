@@ -71,13 +71,17 @@ class HandleAccountLockedStep(Step):
     max_reentries = 3        # so lan vao lai luong (khi modal reset)
     reentry_timeout_bonus = 30   # moi lan re-entry cong them (giay) vao timeout cho
 
-    redirect_wait = 25   # giay cho redirect /not-approved sau login (co the cham qua proxy)
+    redirect_wait = 8   # mac dinh khi khong proxy (neu dung proxy tang thanh 25s)
 
     def should_run(self, ctx: ExecutionContext) -> bool:
         # Redirect sang /not-approved co the den VAI GIAY sau login -> poll, dung
         # check 1 lan roi skip (skip nham -> detect_result se bao success tren cookie).
-        deadline = time.time() + self.redirect_wait
+        wait = 25 if ctx.proxy else self.redirect_wait
+        deadline = time.time() + wait
         while time.time() < deadline:
+            if ctx.browser.is_page_loading():
+                time.sleep(1)
+                continue
             url = ctx.browser.current_url()
             if C.NOT_APPROVED_PATH in url:
                 return True
@@ -128,7 +132,7 @@ class HandleAccountLockedStep(Step):
     # --- state machine: poll lien tuc trang thai roi phan ung ---------------
     poll = 2.0               # chu ky capture trang thai (giay)
     max_continue = 4         # so lan bam Continue toi da trong 1 lan vao
-    loading_grace = 8        # so poll "loading" lien tiep truoc khi F5
+    loading_grace = 8        # so poll "loading" lien tiep (khong proxy); proxy -> 30 (60s)
     max_refresh = 3          # so lan F5 do loading truoc khi RE-ENTRY
 
     def _try_unlock(self, ctx: ExecutionContext, extra_timeout: int = 0):
@@ -145,6 +149,7 @@ class HandleAccountLockedStep(Step):
         continue_clicks = 0
         loading_streak = 0
         refreshes = 0
+        grace_limit = 30 if ctx.proxy else self.loading_grace
 
         while time.time() < deadline:
             st = self._detect_state(ctx)
@@ -178,7 +183,7 @@ class HandleAccountLockedStep(Step):
 
             if st == "loading":
                 loading_streak += 1
-                if loading_streak >= self.loading_grace:
+                if loading_streak >= grace_limit:
                     # modal Continue dang loading ket -> F5 (tai lai trang)
                     refreshes += 1
                     loading_streak = 0

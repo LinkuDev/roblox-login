@@ -72,11 +72,14 @@ CAPTCHA_PROVIDER=manual rlx run roblox.login -u USER -p PASS --no-headless
 
 ## Chay tang SaaS
 ```bash
+# Dev (SQLite, auto tao bang):
 make api          # http://localhost:8000/docs
-make worker       # xu ly order/job trong queue
-# hoac full stack:
-docker compose -f docker/docker-compose.yml up
+
+# Prod tren VPS (BE + Pool, Postgres) - chay tu REPO ROOT:
+cp .env.prod.example .env   # sua APP_SECRET_KEY, APP_ADMIN_EMAILS, POSTGRES_PASSWORD...
+docker compose -f docker/docker-compose.prod.yml up -d --build
 ```
+Node la may ngoai, cam vao pool qua API key cua admin (khong chay o server).
 
 ## Kien truc
 

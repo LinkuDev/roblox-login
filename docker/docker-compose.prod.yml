@@ -1,0 +1,49 @@
+# Deploy BE + Pool len VPS (mo hinh pull: node la may ngoai, KHONG chay o server).
+#
+#   CHAY TU REPO ROOT (khong `cd docker`) de compose doc root .env cho ${...}:
+#     docker compose -f docker/docker-compose.prod.yml up -d --build
+#
+# Chi 2 service: api (FastAPI + pool) + db (Postgres). Khong redis/worker/chromium.
+# Root .env cung cap: APP_SECRET_KEY, APP_ADMIN_EMAILS, APP_CORS_ORIGINS, CRYPTO_*,
+# POSTGRES_USER/PASSWORD/DB. Xem .env.prod.example.
+services:
+  api:
+    build: { context: .., dockerfile: docker/Dockerfile.api }
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      # `environment` GHI DE `env_file` -> chac chan prod + tro DB toi service `db`.
+      APP_ENV: prod
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rlx}:${POSTGRES_PASSWORD:-rlx}@db:5432/${POSTGRES_DB:-rlx}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Public 8000 -> node remote cam vao pool + FE goi API. Khi da co nginx/TLS,
+      # doi thanh "127.0.0.1:8000:8000" va cho nginx proxy (khuyen nghi o prod that).
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rlx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rlx}
+      POSTGRES_DB: ${POSTGRES_DB:-rlx}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rlx}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Khong publish 5432 ra ngoai (chi api trong mang docker truy cap).
+
+volumes:
+  pgdata:

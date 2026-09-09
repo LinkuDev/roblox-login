@@ -19,6 +19,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "python-jose[cryptography]>=3.3",
     "bcrypt>=4.1",
+    "email-validator>=2.0",   # schemas/auth dung EmailStr
     "typer>=0.12",
     # Chi dung botasaurus-driver (Driver). Goi 'botasaurus' full keo javascript_fixes
     # -> doi Node.js khi dong goi PyInstaller nen KHONG dung.

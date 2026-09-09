@@ -27,7 +27,7 @@ class Deposit(Base, UUIDPk, TimestampMixin):
     amount_points: Mapped[int] = mapped_column(Integer)             # diem se cong
     currency: Mapped[str] = mapped_column(String(20), default="USDT")
     amount_crypto: Mapped[float] = mapped_column(Numeric(24, 8), default=0)  # so tien phai tra
-    rate_points_per_usd: Mapped[int] = mapped_column(Integer, default=0)     # ty gia da chot
+    usd_per_point: Mapped[float] = mapped_column(Numeric(12, 6), default=0)  # gia diem da chot
 
     # thong tin thanh toan tra ve tu provider
     pay_address: Mapped[str] = mapped_column(String(200), default="")

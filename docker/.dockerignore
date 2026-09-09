@@ -1,6 +1,0 @@
-.venv
-data
-logs
-__pycache__
-*.db
-.git

@@ -40,14 +40,19 @@ class PaymentService:
     def create_deposit(self, user_id: str, amount_points: int, currency: str) -> dict:
         if not self.settings.enabled:
             raise BusinessError("nap crypto dang tat")
-        if amount_points < self.settings.min_points:
-            raise BusinessError(f"nap toi thieu {self.settings.min_points} diem")
-        currency = (currency or "").upper() or self.settings.currency_list()[0]
-        if currency not in self.settings.currency_list():
-            raise BusinessError(f"currency khong ho tro: {currency}")
-
-        rate = self.settings.points_per_usd
-        amount_usd = round(amount_points / rate, 8) if rate else 0.0
+        amount_usd = self.settings.usd_of(amount_points)
+        if amount_usd < self.settings.min_usd:
+            raise BusinessError(
+                f"nap toi thieu ${self.settings.min_usd:g} (~{self.settings.min_points} diem)"
+            )
+        currency = (currency or "").upper()
+        allowed = self.settings.currency_list()
+        if allowed:                       # co allowlist -> ep tap con + default = cai dau
+            currency = currency or allowed[0]
+            if currency not in allowed:
+                raise BusinessError(f"currency khong ho tro: {currency}")
+        elif not currency:                # khong allowlist -> NOWPayments quyet, chi can co coin
+            raise BusinessError("can chon currency (vd USDT)")
 
         deposit = self.repo.add(
             Deposit(
@@ -56,7 +61,7 @@ class PaymentService:
                 status=DepositStatus.PENDING,
                 amount_points=amount_points,
                 currency=currency,
-                rate_points_per_usd=rate,
+                usd_per_point=self.settings.usd_per_point,
             )
         )
         self.session.flush()   # co deposit.id lam order_id/external_id

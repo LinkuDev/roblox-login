@@ -103,6 +103,20 @@ def run(
 
 
 @app.command()
+def initdb():
+    """Tao bang trong DB (idempotent). Chay 1 lan sau khi dung Postgres o prod.
+
+    Dev (APP_ENV=dev) app tu tao bang luc khoi dong; prod thi KHONG -> dung lenh nay
+    (hoac alembic sau nay). `create_all` bo qua bang da co nen chay lai an toan.
+    """
+    from app.db.session import init_db
+
+    s = get_settings()
+    init_db()
+    typer.echo(f"initdb OK -> {s.db.database_url.split('@')[-1]}")
+
+
+@app.command()
 def config():
     """In cau hinh hien tai (an secret)."""
     s = get_settings()

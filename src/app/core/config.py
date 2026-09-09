@@ -173,8 +173,8 @@ class CryptoSettings(BaseSettings):
 
     - provider: `manual` (dev/mac dinh - admin tao dia chi vi + confirm tay hoac qua
       webhook noi bo) hoac `nowpayments` (goi HTTP that, xac thuc IPN bang HMAC).
-    - points_per_usd: 1 USD (stablecoin) = bao nhieu diem. total_usd = points/rate.
-    - min_points: nạp toi thieu.
+    - usd_per_point: gia 1 diem = bao nhieu USD (vd 0.03). total_usd = points * usd_per_point.
+    - min_usd: nap toi thieu tinh theo USD (vd 1.0 = $1).
     - deposit_ttl_minutes: het han thi lenh nap chuyen EXPIRED.
     """
 
@@ -182,11 +182,15 @@ class CryptoSettings(BaseSettings):
 
     provider: str = "manual"
     enabled: bool = True
-    points_per_usd: int = 1000
-    min_points: int = 1000
+    # Gia ban: 1 diem = 0.03 USD (khach nap $X -> nhan X / usd_per_point diem).
+    usd_per_point: float = 0.03
+    # Nap toi thieu 1 lan, tinh theo USD.
+    min_usd: float = 1.0
     deposit_ttl_minutes: int = 60
-    # currency (stablecoin/coin) cho phep. FE chon 1 trong list nay.
-    currencies: str = "USDT,USDC,BTC,ETH"
+    # Coin cho phep (allowlist de HIEN THI + validate). DE TRONG -> khong gioi han:
+    # NOWPayments tu quyet coin nao tra duoc (nguon su that = coin ban bat ben NOWPayments).
+    # Chi dien neu muon ep 1 tap con (vd chi nhan USDT/USDC).
+    currencies: str = ""
     # `manual`: dia chi vi nhan tien (hien cho user). Co the map theo currency sau.
     wallet_address: str = ""
     # `nowpayments`: khoa API + IPN secret (xac thuc webhook). Trong env, khong hardcode.
@@ -198,6 +202,17 @@ class CryptoSettings(BaseSettings):
 
     def currency_list(self) -> list[str]:
         return [c.strip().upper() for c in self.currencies.split(",") if c.strip()]
+
+    def usd_of(self, points: int) -> float:
+        """So USD phai tra cho `points` diem (theo gia ban)."""
+        return round(points * self.usd_per_point, 8)
+
+    @property
+    def min_points(self) -> int:
+        """Nap toi thieu quy ra diem (suy tu min_usd) - tien cho FE + thong bao loi."""
+        if self.usd_per_point <= 0:
+            return 0
+        return int(round(self.min_usd / self.usd_per_point))
 
 
 class Settings(BaseSettings):

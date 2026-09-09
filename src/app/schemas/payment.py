@@ -30,10 +30,11 @@ class DepositConfirmRequest(BaseModel):
 
 
 class CryptoConfigResponse(BaseModel):
-    """Cau hinh nap cho FE (min, ty gia, currency ho tro)."""
+    """Cau hinh nap cho FE (gia, min, currency ho tro)."""
 
     enabled: bool
     provider: str
-    min_points: int
-    points_per_usd: int
+    usd_per_point: float      # 1 diem = bao nhieu USD (vd 0.03)
+    min_usd: float            # nap toi thieu theo USD
+    min_points: int           # min_usd quy ra diem (tien cho FE)
     currencies: list[str]

@@ -123,13 +123,13 @@ khong sua code. Xem `core/config.py :: CryptoSettings`.
 #### GET `/billing/crypto-config`  · public
 Cau hinh cho FE dung form nap:
 ```json
-{ "enabled": true, "provider": "manual", "min_points": 1000,
-  "points_per_usd": 1000, "currencies": ["USDT","USDC","BTC","ETH"] }
+{ "enabled": true, "provider": "nowpayments", "usd_per_point": 0.03,
+  "min_usd": 1.0, "min_points": 33, "currencies": [] }
 ```
 
 #### POST `/billing/deposits`  · user
 Tao lenh nap. Body: `{ "amount_points": 5000, "currency": "USDT" }`.
-He thong tinh so crypto phai tra (`amount_points / points_per_usd`) + lay dia
+He thong tinh so crypto phai tra (`amount_points * usd_per_point`) + lay dia
 chi/invoice tu provider:
 ```json
 { "id": "...", "status": "pending", "provider": "manual", "amount_points": 5000,
@@ -239,9 +239,9 @@ Node dung `X-API-Key` cua admin. Khach (`user`) **khong** claim/report duoc.
 | `APP_CORS_ORIGINS` | Origin FE duoc phep goi API (`*` hoac list). |
 | `APP_ADMIN_EMAILS` | Email tu dong len admin luc register. |
 | `CRYPTO_PROVIDER` | `manual` \| `nowpayments`. |
-| `CRYPTO_POINTS_PER_USD` | 1 USD = bao nhieu diem. |
-| `CRYPTO_MIN_POINTS` | Nap toi thieu. |
-| `CRYPTO_CURRENCIES` | Currency ho tro (list). |
+| `CRYPTO_USD_PER_POINT` | Gia 1 diem = bao nhieu USD (vd 0.03). |
+| `CRYPTO_MIN_USD` | Nap toi thieu theo USD. |
+| `CRYPTO_CURRENCIES` | Coin cho phep (allowlist). De trong -> NOWPayments tu quyet. |
 | `CRYPTO_WALLET_ADDRESS` | (manual) dia chi vi nhan tien. |
 | `CRYPTO_API_KEY` / `CRYPTO_IPN_SECRET` / `CRYPTO_CALLBACK_BASE` | (nowpayments). |
 

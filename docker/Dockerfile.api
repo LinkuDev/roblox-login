@@ -1,0 +1,17 @@
+# Image BE/API + Pool. KHONG can chromium: browser chay o NODE ngoai (Windows exe),
+# server chi phuc vu API + dieu phoi pool -> image nho, khoi dong nhanh.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+
+# psycopg[binary] da kem lib -> khong can build-essential.
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir -e ".[postgres]"
+
+EXPOSE 8000
+
+# Tao bang (idempotent) roi chay API nhieu worker. Pool claim atomic tren Postgres
+# (FOR UPDATE SKIP LOCKED) nen nhieu worker an toan.
+CMD ["sh", "-c", "rlx initdb && uvicorn app.main:api --app-dir src --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-4}"]

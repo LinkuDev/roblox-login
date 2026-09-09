@@ -1,0 +1,24 @@
+# Build context = repo root (docker-compose context: ..). Loai cac thu nang/khong can
+# de build nhanh + image sach. Dockerfile.api chi COPY pyproject.toml, README.md, src.
+.venv/
+.git/
+.gitignore
+data/
+scratchpad/
+node_app/
+docs/
+tests/
+**/__pycache__/
+*.pyc
+*.pyo
+*.db
+*.sqlite3
+*.log
+.env
+.env.*
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/

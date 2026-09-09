@@ -53,8 +53,9 @@ def crypto_config():
     return CryptoConfigResponse(
         enabled=c.enabled,
         provider=c.provider,
+        usd_per_point=c.usd_per_point,
+        min_usd=c.min_usd,
         min_points=c.min_points,
-        points_per_usd=c.points_per_usd,
         currencies=c.currency_list(),
     )
 

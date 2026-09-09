@@ -44,6 +44,7 @@ class NodeAgent:
         store: ResultStore | None = None,
         poll_interval: float = 1.0,
         settle_delay: float = 1.2,
+        heartbeat_interval: float = 60.0,
     ) -> None:
         self.pool = pool
         self.run_flow = run_flow
@@ -53,10 +54,14 @@ class NodeAgent:
         self.store = store
         self.poll = poll_interval
         self.settle = settle_delay
+        # Heartbeat: dinh ky gia han lease cho MOI record dang chay -> flow lau khong bi
+        # node khac cuop. Phai < lease_ttl cua RemotePool (mac dinh 240s).
+        self.hb_interval = heartbeat_interval
 
         self._lock = threading.Lock()
         self._running = False
         self._sup: threading.Thread | None = None
+        self._hb: threading.Thread | None = None
         self._exec: ThreadPoolExecutor | None = None
         self._layout: SlotAllocator | None = None
         self.hard_cap = self.get_max_concurrent()
@@ -76,6 +81,31 @@ class NodeAgent:
             self._exec = ThreadPoolExecutor(max_workers=self.hard_cap)
         self._sup = threading.Thread(target=self._supervise, name="node-supervisor", daemon=True)
         self._sup.start()
+        self._hb = threading.Thread(target=self._heartbeat_loop, name="node-heartbeat", daemon=True)
+        self._hb.start()
+
+    def _heartbeat_loop(self) -> None:
+        """Dinh ky gia han lease cho cac record dang chay (chong bi reclaim khi flow lau).
+        Ngu theo tung nhip nho de stop() phan hoi nhanh."""
+        while self._running:
+            waited = 0.0
+            while self._running and waited < self.hb_interval:
+                time.sleep(0.5)
+                waited += 0.5
+            if not self._running:
+                break
+            with self._lock:
+                record_ids = list(self._active)
+            for rid in record_ids:
+                with suppress(Exception):   # loi heartbeat khong duoc lam chet agent
+                    if not self.pool.heartbeat(rid):
+                        # mat lease (record da bi reclaim/report) -> chi log, slot van chay xong
+                        with suppress(Exception):
+                            self._log_lease_lost(rid)
+
+    def _log_lease_lost(self, record_id: str) -> None:
+        with suppress(Exception):
+            print(f"[heartbeat] mat lease record {record_id} (co the da bi reclaim)")
 
     def stop(self) -> None:
         with self._lock:

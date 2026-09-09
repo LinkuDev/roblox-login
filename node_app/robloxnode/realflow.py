@@ -62,7 +62,12 @@ def real_flow(record: Record, placement: dict | None = None, proxy: str | None =
     if proxy:   # proxy da xoay tu node -> dung cho phien nay
         options["proxy"] = proxy
 
-    cred = Credential(username=record.username, password=record.password)
+    cred = Credential(
+        username=record.username,
+        password=record.password,
+        totp_secret=record.totp_secret,   # acc 2FA: totp tu SaaS record
+        email=record.email,
+    )
     result = run_service(
         "roblox.login", cred, job_id=record.id, headless=False, solver=solver,
         settings=settings, options=options,

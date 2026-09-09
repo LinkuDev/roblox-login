@@ -17,6 +17,8 @@ class Record:
     id: str
     username: str
     password: str
+    totp_secret: str | None = None   # tu SaaS claim -> can cho acc 2FA
+    email: str | None = None
 
 
 class PoolClient(Protocol):
@@ -24,6 +26,7 @@ class PoolClient(Protocol):
     def claim(self) -> Record | None: ...
     def report(self, record_id: str, result: dict) -> None: ...
     def pending_count(self) -> int: ...
+    def heartbeat(self, record_id: str) -> bool: ...   # gia han lease; local -> no-op
 
 
 class LocalPool:
@@ -89,3 +92,6 @@ class LocalPool:
     def pending_count(self) -> int:
         with self._lock:
             return len(self._q)
+
+    def heartbeat(self, record_id: str) -> bool:  # noqa: ARG002 - local khong co lease
+        return True

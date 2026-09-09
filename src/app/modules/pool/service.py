@@ -23,7 +23,11 @@ from app.core.logging import get_logger
 from app.db.models import Order, Record
 from app.db.repositories import OrderRepository, RecordRepository
 from app.domain.models import Credential
-from app.modules.pool.policy import RETRYABLE_MAX_ATTEMPTS, is_retryable
+from app.modules.pool.policy import (
+    HARD_MAX_ATTEMPTS,
+    RETRYABLE_MAX_ATTEMPTS,
+    is_retryable,
+)
 
 log = get_logger("pool")
 
@@ -65,6 +69,7 @@ class PoolService:
     def claim_next(self, node_id: str, ttl_seconds: int = 300) -> dict | None:
         """Claim 1 record (atomic). None neu pool rong. Tra input cho node chay."""
         now = datetime.now(UTC)
+        self._reap_exhausted(now)   # poison record -> FAILED truoc, khong reclaim vo han
         sql = _CLAIM_PG if self.session.bind.dialect.name == "postgresql" else _CLAIM_SQLITE
         row = self.session.execute(
             sql,
@@ -82,6 +87,52 @@ class PoolService:
             "email": row.email,
             "attempt": row.attempt,
         }
+
+    def extend_lease(self, record_id: str, node_id: str, ttl_seconds: int = 300) -> bool:
+        """Gia han lease (heartbeat) cho record dang chay: day claim_expires_at ra xa de
+        node khac KHONG cuop record dang xu ly lau (flow captcha co the > TTL).
+
+        Chi gia han neu record VAN thuoc node nay va con 'running'. Tra False neu mat
+        lease (da bi reclaim / da report) -> node biet ma dung, tranh chay trung + report de.
+        """
+        now = datetime.now(UTC)
+        res = self.session.execute(
+            text(
+                "UPDATE records SET claim_expires_at=:exp, updated_at=:now "
+                "WHERE id=:rid AND node_id=:nid AND status='running'"
+            ),
+            {"exp": now + timedelta(seconds=ttl_seconds), "now": now, "rid": record_id, "nid": node_id},
+        )
+        return (res.rowcount or 0) > 0
+
+    def _reap_exhausted(self, now: datetime) -> None:
+        """Record 'running' da het han va CLAIM qua HARD_MAX_ATTEMPTS lan (node chet lien
+        tuc truoc khi report) -> danh FAILED('exhausted') de khong reclaim vo han. Sync
+        lai cac order bi anh huong (dem success/failed). Query re: thuong 0 dong."""
+        rows = self.session.execute(
+            text(
+                "SELECT id, order_id FROM records WHERE status='running' "
+                "AND claim_expires_at IS NOT NULL AND claim_expires_at < :now AND attempt >= :cap"
+            ),
+            {"now": now, "cap": HARD_MAX_ATTEMPTS},
+        ).all()
+        if not rows:
+            return
+        self.session.execute(
+            text(
+                "UPDATE records SET status='failed', error_code='exhausted', "
+                "reason='qua nhieu lan reclaim (node chet lien tuc / luon qua TTL)', "
+                "claim_expires_at=NULL, updated_at=:now "
+                "WHERE status='running' AND claim_expires_at IS NOT NULL "
+                "AND claim_expires_at < :now AND attempt >= :cap"
+            ),
+            {"now": now, "cap": HARD_MAX_ATTEMPTS},
+        )
+        for oid in {r.order_id for r in rows}:
+            order = self.orders.get(oid)
+            if order:
+                self._sync_order(order)
+        log.info("records_reaped_exhausted", count=len(rows))
 
     def report(self, record_id: str, result: dict, node_id: str = "") -> dict:
         """Node bao ket qua. success/failed(terminal)/retry. Doi status record + order."""

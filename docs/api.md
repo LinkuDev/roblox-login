@@ -222,11 +222,20 @@ sap theo `priority` giam. Neu gui token → loc bo cai user da `dismiss`.
 Node dung `X-API-Key` cua admin. Khach (`user`) **khong** claim/report duoc.
 
 - `POST /pool/claim` — Body: `{ "node_id": "", "ttl_seconds": 300 }`. Lay 1 record
-  (atomic, khong 2 node trung). `204 No Content` neu pool rong.
+  (atomic, khong 2 node trung). Tra kem `service_id, username, password, totp_secret,
+  email, attempt`. `204 No Content` neu pool rong. Record thanh `running`, het `ttl_seconds`
+  ma khong report/heartbeat -> bi reclaim (node chet). Reclaim qua 5 lan (node chet lien
+  tuc) -> tu danh `failed` (error_code `exhausted`) de khong loop vo han.
+- `POST /pool/heartbeat` — Body: `{ "record_id": "...", "node_id": "", "ttl_seconds": 300 }`.
+  Gia han lease record dang chay (flow captcha co the > TTL -> tranh bi node khac cuop).
+  `{ "ok": true }` neu con giu lease; `false` neu da mat (bi reclaim / da report) → node nen dung.
+  Node tu heartbeat dinh ky (< ttl_seconds) trong luc chay.
 - `POST /pool/report` — Body: `{ "record_id": "...", "result": {...}, "node_id": "" }`.
-  `result.success=true` → SUCCESS + luu cookie. Loi login (terminal:
+  `result` chap nhan dang flat (`{success, error:<code>, reason, cookies:{...}}`) hoac nested
+  (`{success, error:{code,message}, data:{session:{cookies}}}`).
+  `success=true` → SUCCESS + luu cookie. Loi login (terminal:
   `invalid_credentials|account_locked|need_mobile_app|two_factor_required`) → FAILED.
-  Loi ha tang & con luot → tra lai pool (retry 1 lan).
+  Loi ha tang & con luot → tra lai pool (retry 1 lan). Node retry report khi loi mang.
 - `GET /pool/records` — Query `order_id`, `status`. Khach xem record cua minh; admin xem tat ca.
 - `GET /pool/stats` — dem theo status (scoped nhu tren).
 

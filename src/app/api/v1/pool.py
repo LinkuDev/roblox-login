@@ -32,6 +32,12 @@ class ReportBody(BaseModel):
     node_id: str = ""
 
 
+class HeartbeatBody(BaseModel):
+    record_id: str
+    node_id: str = ""
+    ttl_seconds: int = 300
+
+
 class RecordView(BaseModel):
     id: str
     order_id: str
@@ -66,6 +72,18 @@ def report(
     session: Session = Depends(db_session),
 ):
     return PoolService(session).report(body.record_id, body.result, body.node_id)
+
+
+@router.post("/heartbeat")
+def heartbeat(
+    body: HeartbeatBody,
+    _admin: User = Depends(require_admin),
+    session: Session = Depends(db_session),
+):
+    """Node gia han lease record dang chay (chong bi node khac cuop khi flow lau).
+    ok=False -> node da mat lease (bi reclaim/da report) -> nen dung xu ly."""
+    ok = PoolService(session).extend_lease(body.record_id, body.node_id or "node", body.ttl_seconds)
+    return {"ok": ok}
 
 
 def _scope(user: User) -> str | None:

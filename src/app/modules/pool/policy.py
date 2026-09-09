@@ -10,6 +10,11 @@ from __future__ import annotations
 # So lan CHAY toi da cho record gap loi ha tang (1 = chay lan dau, 2 = them 1 retry).
 RETRYABLE_MAX_ATTEMPTS = 2
 
+# TRAN CUNG tong so lan CLAIM 1 record (gom ca reclaim khi node CHET giua chung, khong
+# qua report nen khong bi cap RETRYABLE ben tren chan). Vuot -> danh FAILED('exhausted')
+# de khong reclaim vo han (poison record lam order khong bao gio xong).
+HARD_MAX_ATTEMPTS = 5
+
 # error_code coi la LOI LOGIN (terminal, KHONG retry). Con lai deu la ha tang -> retry.
 TERMINAL_LOGIN_CODES = frozenset(
     {

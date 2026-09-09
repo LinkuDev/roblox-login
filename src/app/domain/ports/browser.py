@@ -47,6 +47,14 @@ class BrowserSession(ABC):
     def clear_cookies(self) -> None:  # noqa: B027 - hook tuy chon, mac dinh no-op
         """Xoa cookie phien hien tai (provider override neu ho tro)."""
 
+    def is_page_loading(self) -> bool:  # noqa: B027 - hook tuy chon
+        """True neu trang dang tai (readyState != 'complete'). Provider override neu ho tro."""
+        return False
+
+    def wait_page_loaded(self, timeout: float = 30.0, poll: float = 0.5) -> bool:  # noqa: B027
+        """Cho toi khi trang tai xong (readyState == 'complete'). Provider override."""
+        return True
+
     def emulate(  # noqa: B027 - hook tuy chon, mac dinh no-op
         self,
         width: int,

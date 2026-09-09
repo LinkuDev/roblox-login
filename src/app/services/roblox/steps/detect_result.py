@@ -81,6 +81,9 @@ class DetectLoginResultStep(Step):
         """
         deadline = time.time() + self.settle_timeout
         while time.time() < deadline:
+            if ctx.browser.is_page_loading():
+                time.sleep(1)
+                continue
             url = ctx.browser.current_url()
             if C.NOT_APPROVED_PATH in url:            # khoa -> terminal
                 return

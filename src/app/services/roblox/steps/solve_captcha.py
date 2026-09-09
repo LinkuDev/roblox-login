@@ -28,6 +28,8 @@ class SolveCaptchaStep(Step):
     def should_run(self, ctx: ExecutionContext) -> bool:
         if ctx.get("already_logged_in"):
             return False
+        if ctx.browser.is_page_loading():
+            ctx.browser.wait_page_loaded(timeout=10)
         # chi chay khi phat hien khung captcha (Arkose co the load cham hon 5s)
         return ctx.browser.exists(C.SEL_CAPTCHA_FRAME, timeout=10)
 

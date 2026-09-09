@@ -198,7 +198,7 @@ class BotasaurusSession(BrowserSession):
                 if el is not None:
                     return el
             now = time.time()
-            if not self._page_loading():
+            if not self.is_page_loading():
                 idle_spent += now - last      # dang tai -> PAUSE (khong cong)
             last = now
             if idle_spent >= timeout:
@@ -209,13 +209,26 @@ class BotasaurusSession(BrowserSession):
                 raise BrowserError(f"khong thay '{selector}' - qua {int(now - start)}s (tran cung)")
             time.sleep(poll)
 
-    def _page_loading(self) -> bool:
-        """True neu trang dang tai (readyState != 'complete', hoac khong doc duoc ->
-        coi nhu dang chuyen trang -> pause timeout)."""
+    def is_page_loading(self) -> bool:
+        """True neu trang dang tai (readyState != 'complete' hoac chua co document.body)."""
         try:
-            return self._d.run_js("return document.readyState") != "complete"
+            return bool(
+                self._d.run_js("return document.readyState !== 'complete' || !document.body")
+            )
         except Exception:
             return True
+
+    def _page_loading(self) -> bool:
+        return self.is_page_loading()
+
+    def wait_page_loaded(self, timeout: float = 30.0, poll: float = 0.5) -> bool:
+        """Cho toi khi trang tai xong (readyState == 'complete' va co document.body)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not self.is_page_loading():
+                return True
+            time.sleep(poll)
+        return False
 
     def exists(self, selector: str, timeout: float = 0) -> bool:
         try:
@@ -282,6 +295,8 @@ class BotasaurusSession(BrowserSession):
             self._d.click(selector)
 
     def text_of(self, selector: str, default: str = "") -> str:
+        if selector.lower() == "body" and self.is_page_loading():
+            self.wait_page_loaded(timeout=5)
         try:
             el = self._d.select(selector, wait=2)
             if el is None:
@@ -502,10 +517,9 @@ class BotasaurusProvider(BrowserProvider):
         want_headless = self.settings.headless if headless is None else headless
         opts: dict[str, Any] = {
             "headless": want_headless,
-            # Botasaurus muon (w, h); settings luu chuoi "w,h" nen dung .window.
-            # window_size override (vd tiling phone thu nho) -> uu tien.
-            "window_size": window_size or self.settings.window,
         }
+        if window_size:
+            opts["window_size"] = window_size
         # PROXY cham -> get() tra ve ngay khi DOM 'interactive' (khong cho tai het
         # anh/font/subresource nhu 'complete'). Element van doi rieng qua wait_for
         # (loading-aware) nen khong lo thao tac som. -> tranh block lau luc tai trang.

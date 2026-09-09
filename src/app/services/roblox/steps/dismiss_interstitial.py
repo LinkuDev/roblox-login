@@ -30,6 +30,8 @@ class DismissMobileInterstitialStep(Step):
     optional = True
 
     def should_run(self, ctx: ExecutionContext) -> bool:
+        if ctx.browser.is_page_loading():
+            ctx.browser.wait_page_loaded(timeout=10)
         return bool(ctx.browser.run_js(_HAS_BROWSER_CONTINUE))
 
     def run(self, ctx: ExecutionContext) -> StepResult:

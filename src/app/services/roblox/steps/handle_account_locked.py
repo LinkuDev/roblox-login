@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import suppress
 
 from app.automation.context import ExecutionContext
 from app.automation.result import StepResult
@@ -25,13 +26,9 @@ from app.services.roblox import constants as C
 
 # Nut unlock co text CHINH XAC "Continue" (KHONG phai "Continue in App"/
 # "Continue in browser" cua man app-promo -> tranh bam nham mo app store).
-_HAS_CONTINUE = (
-    "return [...document.querySelectorAll('button,[role=button]')]"
-    ".some(x=>(x.innerText||'').trim().toLowerCase()==='continue');"
-)
 _CLICK_CONTINUE = (
-    "const b=[...document.querySelectorAll('button,[role=button]')]"
-    ".find(x=>(x.innerText||'').trim().toLowerCase()==='continue');"
+    "const btns=[...document.querySelectorAll('button,[role=button],input[type=button],input[type=submit],a.btn')];"
+    "const b=btns.find(x=>(x.innerText||x.textContent||'').trim().toLowerCase()==='continue');"
     "if(b){b.scrollIntoView({block:'center'});b.click();return true;}return false;"
 )
 
@@ -42,9 +39,9 @@ _CLICK_CONTINUE = (
 _STATE_JS = (
     "const url=location.href.toLowerCase();"
     "const body=(document.body.innerText||'').toLowerCase();"
-    "const vis=el=>!!(el&&(el.offsetParent!==null||el.getClientRects().length));"
-    "const btns=[...document.querySelectorAll('button,[role=button]')];"
-    "const cont=btns.find(x=>(x.innerText||'').trim().toLowerCase()==='continue');"
+    "const vis=el=>!!(el&&(el.offsetWidth>0||el.offsetHeight>0||el.getClientRects().length>0));"
+    "const btns=[...document.querySelectorAll('button,[role=button],input[type=button],input[type=submit],a.btn')];"
+    "const cont=btns.find(x=>(x.innerText||x.textContent||'').trim().toLowerCase()==='continue');"
     "const continueClickable=!!(cont&&!cont.disabled&&"
     "cont.getAttribute('aria-busy')!=='true'&&vis(cont));"
     "const busy=btns.some(x=>vis(x)&&(x.disabled||x.getAttribute('aria-busy')==='true'));"
@@ -52,7 +49,6 @@ _STATE_JS = (
     "return {"
     "notApproved: url.includes('/not-approved'),"
     "home: url.includes('/home'),"
-    "root: (location.pathname==='/'||location.pathname===''),"
     f"appPromo: {json.dumps(list(C.APP_PROMO_TEXTS))}.some(t=>body.includes(t)),"
     "qr: body.includes('scan this qr')||body.includes('qr code'),"
     "retry: body.includes('try unlocking again')||body.includes(\"weren't able to unlock\"),"
@@ -75,7 +71,7 @@ class HandleAccountLockedStep(Step):
     max_reentries = 3        # so lan vao lai luong (khi modal reset)
     reentry_timeout_bonus = 30   # moi lan re-entry cong them (giay) vao timeout cho
 
-    redirect_wait = 8   # giay cho redirect /not-approved sau login (co the cham)
+    redirect_wait = 25   # giay cho redirect /not-approved sau login (co the cham qua proxy)
 
     def should_run(self, ctx: ExecutionContext) -> bool:
         # Redirect sang /not-approved co the den VAI GIAY sau login -> poll, dung
@@ -95,10 +91,6 @@ class HandleAccountLockedStep(Step):
             # timeout cho moi lan re-entry tang len (khoi dinh timeout cu)
             extra_timeout = reentry * self.reentry_timeout_bonus
             self._enter_mobile(ctx)
-
-            # Man doi APP MOBILE (quet QR, khong Continue) -> bo tay, detect_result danh dau.
-            if not ctx.browser.run_js(_HAS_CONTINUE):
-                return StepResult.skipped(self.name, "khong co Continue - detect_result xu ly")
 
             result = self._try_unlock(ctx, extra_timeout=extra_timeout)
             if result is not _RESTART:
@@ -129,13 +121,14 @@ class HandleAccountLockedStep(Step):
             client_hints=C.MOBILE_CLIENT_HINTS,
             scale_factor=3.0,
         )
-        ctx.browser.reload()
+        with suppress(Exception):
+            ctx.browser.reload()
         time.sleep(3)  # cho reload xong
 
     # --- state machine: poll lien tuc trang thai roi phan ung ---------------
     poll = 2.0               # chu ky capture trang thai (giay)
     max_continue = 4         # so lan bam Continue toi da trong 1 lan vao
-    loading_grace = 5        # so poll "loading" lien tiep truoc khi F5
+    loading_grace = 8        # so poll "loading" lien tiep truoc khi F5
     max_refresh = 3          # so lan F5 do loading truoc khi RE-ENTRY
 
     def _try_unlock(self, ctx: ExecutionContext, extra_timeout: int = 0):
@@ -192,7 +185,8 @@ class HandleAccountLockedStep(Step):
                     ctx.log.info("account_locked_loading_f5", refresh=refreshes)
                     if refreshes > self.max_refresh:
                         return _RESTART   # F5 hoai van loading -> vao lai tu dau
-                    ctx.browser.reload()
+                    with suppress(Exception):
+                        ctx.browser.reload()
                     time.sleep(3)
                     # F5 = coi nhu vao lai tu dau -> RESET deadline ve full timeout
                     deadline = time.time() + s.timeout + extra_timeout
@@ -232,18 +226,16 @@ class HandleAccountLockedStep(Step):
             return "loading"          # nut dang spinner sau khi bam
         if st.get("qr"):
             return "need_app"
-        # DA DANG NHAP THAT: app-promo (Explore Roblox) / da vao /home / route "/"
-        # -> UNLOCKED ngay, KE CA co modal (man app-promo chinh la 1 dialog, va trang
-        # dich sau khi mo khoa la route "/"). Debounce 4s o _try_unlock se chan truong
-        # hop "/" thoang qua truoc khi redirect /not-approved (locked account).
-        if st.get("appPromo") or st.get("home") or st.get("root"):
+        # DA DANG NHAP THAT: app-promo (Explore Roblox) / da vao /home
+        # -> UNLOCKED ngay, KE CA co modal.
+        if st.get("appPromo") or st.get("home"):
             return "unlocked"
         # Roi not-approved (URL khac), khong con modal -> unlocked (trang sach).
         if not st.get("notApproved") and not st.get("modal"):
             return "unlocked"
         if st.get("modal"):
             return "loading"
-        return "unknown"
+        return "loading" if st.get("notApproved") else "unknown"
 
     def _body(self, ctx: ExecutionContext) -> str:
         return ctx.browser.text_of("body").lower()

@@ -70,6 +70,6 @@ class SlotAllocator:
         return x, y
 
     def placement(self, idx: int) -> dict:
-        """Goi cho run_service: vi tri + kich thuoc cua so cho phien nay."""
+        """Goi cho run_service: vi tri cua so khi sang mobile (tiling), KHONG ep window_size luc login."""
         x, y = self.position(idx)
-        return {"window_position": (x, y), "window_size": (self.ww, self.wh)}
+        return {"window_position": (x, y)}
